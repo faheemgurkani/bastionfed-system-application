@@ -1,0 +1,26 @@
+# ── Build artefacts ──────────────────────────────────────────────────────────
+.next/
+node_modules/
+frontend/.next/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
+
+# ── Environment / secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# ── OS / editor noise ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/settings.json
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+*.log
+.turbo/

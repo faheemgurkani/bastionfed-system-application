@@ -1,0 +1,151 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  /* Landing / external design tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-overlay: var(--bg-overlay);
+  --color-bg-subtle: var(--bg-subtle);
+
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+  --color-border-focus: var(--border-focus);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+
+  --color-severity-critical: var(--severity-critical);
+  --color-severity-high: var(--severity-high);
+  --color-severity-medium: var(--severity-medium);
+  --color-severity-low: var(--severity-low);
+
+  --color-severity-critical-bg: var(--severity-critical-bg);
+  --color-severity-high-bg: var(--severity-high-bg);
+  --color-severity-medium-bg: var(--severity-medium-bg);
+  --color-severity-low-bg: var(--severity-low-bg);
+
+  --color-interactive-default: var(--interactive-default);
+  --color-interactive-hover: var(--interactive-hover);
+  --color-interactive-muted: var(--interactive-muted);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-display: var(--font-space-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+:root {
+  --bg-base: #000000;
+  --bg-surface: #0a0a0a;
+  --bg-elevated: #111111;
+  --bg-overlay: #1a1a1a;
+  --bg-subtle: #222222;
+
+  --border-default: #2a2a2a;
+  --border-strong: #404040;
+  --border-focus: #ffffff;
+
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-muted: #555555;
+  --text-disabled: #333333;
+
+  /* Landing page theme (shadcn-compatible aliases) */
+  --background: #000000;
+  --foreground: #f5f5f5;
+  --card: #0d0d0d;
+  --card-foreground: #f5f5f5;
+  --muted: #262626;
+  --muted-foreground: #737373;
+  --accent: #e5e5e5;
+  --accent-foreground: #000000;
+  --border: #2a2a2a;
+
+  --severity-critical: #ffffff;
+  --severity-high: #d4d4d4;
+  --severity-medium: #888888;
+  --severity-low: #555555;
+
+  --severity-critical-bg: #1f1f1f;
+  --severity-high-bg: #181818;
+  --severity-medium-bg: #141414;
+  --severity-low-bg: #111111;
+
+  --interactive-default: #ffffff;
+  --interactive-hover: #e0e0e0;
+  --interactive-muted: #2a2a2a;
+
+  --chart-1: #ffffff;
+  --chart-2: #888888;
+  --chart-3: #444444;
+  --chart-4: #222222;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Landing page: grid background and noise overlay */
+.grid-bg {
+  background-image: linear-gradient(to right, rgba(42, 42, 42, 0.5) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(42, 42, 42, 0.5) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+.noise-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* WebGL hero panel — radial vignette mask so the canvas fades into the page background */
+.hero-webgl-mask {
+  -webkit-mask-image: radial-gradient(ellipse 85% 80% at 55% 50%, black 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 85% 80% at 55% 50%, black 35%, transparent 100%);
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
