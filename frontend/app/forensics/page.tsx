@@ -1,32 +1,84 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { SampleList } from '@/components/forensics/SampleList';
 import { AnalysisReport } from '@/components/forensics/AnalysisReport';
 import { MalwareSample } from '@/lib/types';
-import { MOCK_MALWARE_SAMPLES } from '@/lib/mock-data';
+import { useAuth } from '@/contexts/auth-context';
+import { apiFetchJson, ApiError } from '@/lib/api';
+
+type SampleListResponse = {
+  items: MalwareSample[];
+  nextCursor: string | null;
+  total: number;
+};
 
 export default function ForensicsPage() {
-  // FastAPI endpoint: GET http://localhost:8000/api/forensics/samples
-  // TODO: Replace with fetch() when backend is connected
-  
-  const [selectedSample, setSelectedSample] = useState<MalwareSample>(MOCK_MALWARE_SAMPLES[0]!);
+  const { user, loading: authLoading, isGuest } = useAuth();
+  const [samples, setSamples] = useState<MalwareSample[]>([]);
+  const [selectedSample, setSelectedSample] = useState<MalwareSample | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+
+    async function load() {
+      setError(null);
+      try {
+        let data: SampleListResponse;
+        if (isGuest) {
+          data = await apiFetchJson<SampleListResponse>('/api/forensics/samples', { guest: true });
+        } else if (user) {
+          const token = await user.getIdToken();
+          data = await apiFetchJson<SampleListResponse>('/api/forensics/samples', {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } else {
+          return;
+        }
+        if (!cancelled) {
+          setSamples(data.items);
+          setSelectedSample((prev) => {
+            if (prev && data.items.some((s) => s.id === prev.id)) return prev;
+            return data.items[0] ?? null;
+          });
+        }
+      } catch (e) {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : 'Failed to load samples');
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isGuest, user]);
 
   return (
     <AuthGate>
-    <div className="flex gap-6 h-full">
-      <div className="w-1/3 min-w-[320px] h-full">
-        <SampleList 
-          samples={MOCK_MALWARE_SAMPLES} 
-          selectedId={selectedSample.id} 
-          onSelect={setSelectedSample} 
-        />
+      <div className="flex flex-col gap-2 h-full">
+        {error && (
+          <p className="text-sm font-mono text-severity-high px-1">{error}</p>
+        )}
+        <div className="flex gap-6 flex-1 min-h-0">
+          <div className="w-1/3 min-w-[320px] h-full">
+            <SampleList
+              samples={samples}
+              selectedId={selectedSample?.id}
+              onSelect={setSelectedSample}
+            />
+          </div>
+          <div className="flex-1 h-full overflow-hidden">
+            {selectedSample ? (
+              <AnalysisReport sample={selectedSample} />
+            ) : (
+              <div className="text-text-muted text-sm p-6">No samples loaded.</div>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="flex-1 h-full overflow-hidden">
-        <AnalysisReport sample={selectedSample} />
-      </div>
-    </div>
     </AuthGate>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { UserProfile } from '@/lib/types';
+import { apiFetchJson } from '@/lib/api';
 
 const GUEST_STORAGE_KEY = 'bastionfed_guest';
 
@@ -64,8 +65,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (typeof window !== 'undefined') localStorage.removeItem(GUEST_STORAGE_KEY);
         try {
           await upsertUserProfile(firebaseUser);
+          const token = await firebaseUser.getIdToken();
+          await apiFetchJson('/api/auth/session', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email ?? null,
+              displayName: firebaseUser.displayName ?? null,
+              photoURL: firebaseUser.photoURL ?? null,
+            }),
+          });
         } catch (err) {
-          console.error('Failed to upsert user profile', err);
+          console.error('Failed to upsert user profile or backend session', err);
         }
       }
       setLoading(false);

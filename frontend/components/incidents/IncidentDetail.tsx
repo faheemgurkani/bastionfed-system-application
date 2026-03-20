@@ -2,15 +2,54 @@
 
 import { Incident } from '@/lib/types';
 import { ArrowLeft, Search, Bell, Play, Lock, User, CheckCircle, Loader2, Circle, Download, FileText } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/auth-context';
+import { apiFetchJson, ApiError } from '@/lib/api';
 
 interface IncidentDetailProps {
   incident: Incident;
   onBack: () => void;
 }
 
-export function IncidentDetail({ incident, onBack }: IncidentDetailProps) {
+export function IncidentDetail({ incident: initialIncident, onBack }: IncidentDetailProps) {
+  const { user, loading: authLoading, isGuest } = useAuth();
+  const [incident, setIncident] = useState(initialIncident);
   const [activeTab, setActiveTab] = useState('overview');
+
+  useEffect(() => {
+    setIncident(initialIncident);
+  }, [initialIncident]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        let data: Incident;
+        if (isGuest) {
+          data = await apiFetchJson<Incident>(`/api/incidents/${encodeURIComponent(initialIncident.id)}`, {
+            guest: true,
+          });
+        } else if (user) {
+          const token = await user.getIdToken();
+          data = await apiFetchJson<Incident>(`/api/incidents/${encodeURIComponent(initialIncident.id)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } else {
+          return;
+        }
+        if (!cancelled) setIncident(data);
+      } catch (e) {
+        if (!cancelled && e instanceof ApiError) console.warn('Incident detail:', e.message);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, initialIncident.id, isGuest, user]);
 
   const tabs = [
     { id: 'overview', label: 'Overview' },

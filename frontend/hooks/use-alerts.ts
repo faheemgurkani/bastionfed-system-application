@@ -1,6 +1,6 @@
 import { useAlertsContext } from '@/contexts/alerts-context';
 
-/** Consumes the shared alerts stream from SSE (/api/events). Must be used within AlertsProvider. */
+/** Alert list from GET /api/alerts + SSE /api/events (FastAPI). */
 export function useAlerts() {
-  return useAlertsContext();
+  return useAlertsContext().alerts;
 }

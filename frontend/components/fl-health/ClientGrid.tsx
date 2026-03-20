@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import type { FLClient } from "@/lib/types";
 import { useFLClients } from "@/contexts/fl-clients-context";
+import { useAuth } from "@/contexts/auth-context";
+import { apiFetchJson, ApiError } from "@/lib/api";
 import { TriangleAlert, X } from "lucide-react";
 
 const STATUS_ORDER: Record<string, number> = {
@@ -14,6 +16,7 @@ const STATUS_ORDER: Record<string, number> = {
 
 export function ClientGrid() {
   const clients = useFLClients();
+  const { user, loading: authLoading, isGuest } = useAuth();
   const [detailClient, setDetailClient] = useState<FLClient | null>(null);
 
   const sortedClients = [...clients].sort(
@@ -32,6 +35,38 @@ export function ClientGrid() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  // Refresh detail from FastAPI GET /api/fl/clients/{id}
+  useEffect(() => {
+    if (authLoading || !detailClient) return;
+    let cancelled = false;
+
+    async function loadDetail() {
+      try {
+        let data: FLClient;
+        if (isGuest) {
+          data = await apiFetchJson<FLClient>(`/api/fl/clients/${encodeURIComponent(detailClient!.id)}`, {
+            guest: true,
+          });
+        } else if (user) {
+          const token = await user.getIdToken();
+          data = await apiFetchJson<FLClient>(`/api/fl/clients/${encodeURIComponent(detailClient!.id)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } else {
+          return;
+        }
+        if (!cancelled) setDetailClient(data);
+      } catch (e) {
+        if (!cancelled && e instanceof ApiError) console.warn("FL client detail:", e.message);
+      }
+    }
+
+    void loadDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, detailClient?.id, isGuest, user]);
 
   return (
     <div className="bg-bg-surface border border-border-default rounded-lg p-4 flex flex-col h-full relative">

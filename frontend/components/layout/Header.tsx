@@ -6,11 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useActiveRoute } from '@/hooks/use-active-route';
 import { useAuth } from '@/contexts/auth-context';
 import { Bell, Search, LogOut, ArrowRight } from 'lucide-react';
-import { MOCK_ALERTS } from '@/lib/mock-data';
-
-const PRIORITY_ALERTS = MOCK_ALERTS.filter(
-  (a) => (a.severity === 'CRITICAL' || a.severity === 'HIGH') && a.status === 'OPEN',
-).slice(0, 5);
+import { useAlerts } from '@/hooks/use-alerts';
 
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: 'text-red-400',
@@ -21,8 +17,13 @@ export function Header() {
   const activeRoute = useActiveRoute();
   const router = useRouter();
   const { user, loading, isGuest, signOutUser } = useAuth();
+  const alerts = useAlerts();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const priorityAlerts = alerts
+    .filter((a) => (a.severity === 'CRITICAL' || a.severity === 'HIGH') && a.status === 'OPEN')
+    .slice(0, 5);
 
   const onAlerts = activeRoute?.startsWith('/alerts') ?? false;
 
@@ -78,9 +79,9 @@ export function Header() {
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5" />
-              {PRIORITY_ALERTS.length > 0 && (
+              {priorityAlerts.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-white text-black text-[10px] font-bold flex items-center justify-center rounded-full">
-                  {PRIORITY_ALERTS.length}
+                  {priorityAlerts.length}
                 </span>
               )}
             </button>
@@ -93,18 +94,18 @@ export function Header() {
                     Critical &amp; High Alerts
                   </span>
                   <span className="font-mono text-[10px] text-text-muted">
-                    {PRIORITY_ALERTS.length} open
+                    {priorityAlerts.length} open
                   </span>
                 </div>
 
                 {/* Alert list */}
                 <ul className="divide-y divide-border-default max-h-72 overflow-y-auto">
-                  {PRIORITY_ALERTS.length === 0 ? (
+                  {priorityAlerts.length === 0 ? (
                     <li className="px-4 py-4 text-xs font-mono text-text-muted text-center">
                       No critical or high alerts
                     </li>
                   ) : (
-                    PRIORITY_ALERTS.map((alert) => (
+                    priorityAlerts.map((alert) => (
                       <li
                         key={alert.id}
                         className="px-4 py-3 hover:bg-bg-overlay cursor-pointer transition-colors"

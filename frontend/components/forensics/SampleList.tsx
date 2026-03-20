@@ -5,7 +5,7 @@ import { Search, Filter, Upload } from 'lucide-react';
 
 interface SampleListProps {
   samples: MalwareSample[];
-  selectedId: string;
+  selectedId?: string;
   onSelect: (sample: MalwareSample) => void;
 }
 
@@ -40,7 +40,9 @@ export function SampleList({ samples, selectedId, onSelect }: SampleListProps) {
             key={sample.id}
             onClick={() => onSelect(sample)}
             className={`p-4 border-b border-border-default cursor-pointer transition-colors ${
-              selectedId === sample.id ? 'bg-bg-overlay border-l-2 border-l-white' : 'bg-bg-surface hover:bg-bg-base border-l-2 border-l-transparent'
+              selectedId != null && selectedId === sample.id
+                ? 'bg-bg-overlay border-l-2 border-l-white'
+                : 'bg-bg-surface hover:bg-bg-base border-l-2 border-l-transparent'
             }`}
           >
             <div className="flex justify-between items-start mb-2">

@@ -4,15 +4,8 @@ import { PerformanceCharts } from '@/components/fl-health/PerformanceCharts';
 import { ClientGrid } from '@/components/fl-health/ClientGrid';
 import { DriftTable } from '@/components/fl-health/DriftTable';
 import { ModelZoo } from '@/components/fl-health/ModelZoo';
-import { MOCK_FL_ROUNDS, MOCK_FL_CLIENTS } from '@/lib/mock-data';
 
 export default function FLHealthPage() {
-  // FastAPI endpoint: GET http://localhost:8000/api/fl/status
-  // FastAPI endpoint: GET http://localhost:8000/api/fl/clients
-  // TODO: Replace with fetch() when backend is connected
-  const statusData = MOCK_FL_ROUNDS;
-  const clientsData = MOCK_FL_CLIENTS;
-
   return (
     <AuthGate>
     <div className="flex flex-col gap-6">

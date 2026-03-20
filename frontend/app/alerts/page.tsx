@@ -3,7 +3,7 @@
 import { AuthGate } from "@/components/auth/AuthGate";
 import { AlertTable } from "@/components/alerts/AlertTable";
 import { AlertFilters } from "@/components/alerts/AlertFilters";
-import { useAlerts } from "@/hooks/use-alerts";
+import { useAlertsContext } from "@/contexts/alerts-context";
 import { useState, useMemo } from "react";
 import type { Alert } from "@/lib/types";
 
@@ -64,7 +64,7 @@ function filterAndSortAlerts(
 }
 
 export default function AlertsPage() {
-  const alerts = useAlerts();
+  const { alerts, alertsLoading, alertsError } = useAlertsContext();
   const [activeSeverity, setActiveSeverity] = useState<string>("ALL");
   const [activeTactic, setActiveTactic] = useState<string>("All Tactics");
   const [activeDateRange, setActiveDateRange] = useState<string>("All Time");
@@ -79,6 +79,12 @@ export default function AlertsPage() {
   return (
     <AuthGate>
       <div className="flex flex-col gap-6 h-full">
+        {alertsLoading && (
+          <p className="text-sm font-mono text-text-muted">Loading alerts…</p>
+        )}
+        {alertsError && (
+          <p className="text-sm font-mono text-severity-high">Alerts: {alertsError}</p>
+        )}
         <AlertFilters
           activeSeverity={activeSeverity}
           onChangeSeverity={setActiveSeverity}
