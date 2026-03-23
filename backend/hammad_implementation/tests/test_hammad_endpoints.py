@@ -1,0 +1,286 @@
+from __future__ import annotations
+
+import io
+
+from fastapi.testclient import TestClient
+
+
+def test_health(client: TestClient):
+    r = client.get("/health")
+    assert r.status_code == 200
+    assert r.json()["status"] == "ok"
+
+
+def test_openapi_contains_hammad_paths_only(client: TestClient):
+    r = client.get("/openapi.json")
+    assert r.status_code == 200
+    paths = r.json().get("paths", {})
+
+    must_have = (
+        "/api/bastionbot/conversations/{conversation_id}",
+        "/api/devices",
+        "/api/devices/{device_id}",
+        "/api/fl/drift",
+        "/api/fl/models",
+        "/api/forensics/rca",
+        "/api/forensics/samples",
+        "/api/incidents/{incident_id}",
+        "/api/incidents/{incident_id}/playbook/steps/{step_id}",
+        "/api/incidents/{incident_id}/playbook/halt",
+        "/api/network/block-ip",
+    )
+
+    for p in must_have:
+        assert p in paths, f"missing OpenAPI path {p}"
+
+    forbidden = (
+        "/api/alerts",
+        "/api/audit/verify",
+        "/api/dashboard/kpis",
+        "/api/auth/session",
+        "/api/events",
+        "/api/fl/status",
+        "/api/fl/clients/{client_id}",
+        "/api/forensics/samples/{sample_id}",
+        "/api/forensics/rca/{rca_id}",
+        "/api/devices/{device_id}/quarantine",
+    )
+    for p in forbidden:
+        assert p not in paths, f"forbidden OpenAPI path {p}"
+
+
+def test_get_endpoints_allow_guest(client: TestClient):
+    assert client.get("/api/devices?guest=true").status_code == 200
+    assert client.get("/api/devices/dev-01?guest=true").status_code == 200
+    assert client.get("/api/fl/drift?guest=true").status_code == 200
+    assert client.get("/api/fl/models?guest=true").status_code == 200
+    assert client.get("/api/forensics/rca?guest=true").status_code == 200
+    assert client.get("/api/bastionbot/conversations/conv-1?guest=true").status_code == 200
+
+
+def test_get_endpoints_require_auth(client: TestClient):
+    assert client.get("/api/devices").status_code == 401
+
+
+def test_mutations_require_user_auth(client: TestClient, auth_headers: dict[str, str]):
+    # guest=true should be forbidden (require_user)
+    r = client.patch(
+        "/api/incidents/INC-001?guest=true",
+        json={"status": "RESPONDING", "assignee": "JP", "notes": "test"},
+    )
+    assert r.status_code == 403
+
+    # no bearer token should be unauthorized
+    r2 = client.patch(
+        "/api/incidents/INC-001",
+        json={"status": "RESPONDING", "assignee": "JP", "notes": "test"},
+    )
+    assert r2.status_code == 401
+
+    # bearer should work
+    r3 = client.patch(
+        "/api/incidents/INC-001",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"status": "RESPONDING", "assignee": "JP", "notes": "Escalated after confirmed lateral movement."},
+    )
+    assert r3.status_code == 200
+    j = r3.json()
+    assert j["status"] == "RESPONDING"
+    assert j["assignee"] == "JP"
+
+
+def test_patch_playbook_step(client: TestClient, auth_headers: dict[str, str]):
+    r = client.patch(
+        "/api/incidents/INC-001/playbook/steps/s6",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"status": "COMPLETED", "notes": "Test step completion"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["id"] == "s6"
+    assert j["status"] == "COMPLETED"
+
+
+def test_halt_playbook_stops_running_step(client: TestClient, auth_headers: dict[str, str]):
+    before = client.get("/api/forensics/rca?guest=true").json()
+    assert "items" in before
+
+    r = client.post(
+        "/api/incidents/INC-001/playbook/halt",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"reason": "Manual override by analyst JP"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["halted"] is True
+    assert j["stoppedAt"] == "s6"
+    assert "haltedAt" in j
+
+
+def test_forensics_upload_sample(client: TestClient, auth_headers: dict[str, str]):
+    file_bytes = b"hello-forensics"
+    files = {"file": ("sample.bin", io.BytesIO(file_bytes), "application/octet-stream")}
+    r = client.post(
+        "/api/forensics/samples",
+        headers={**auth_headers},
+        files=files,
+        data={"deviceId": "dev-02", "notes": "LockBit 3.0"},
+    )
+    assert r.status_code == 201
+    j = r.json()
+    assert j["sha256"]
+    assert j["status"] in ("PENDING", "ANALYZING", "ANALYZED")
+    assert j["uploadTime"]
+
+
+def test_forensics_generate_rca(client: TestClient, auth_headers: dict[str, str]):
+    r = client.post(
+        "/api/forensics/rca",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"incidentId": "INC-001"},
+    )
+    assert r.status_code == 201
+    j = r.json()
+    assert j["incidentId"] == "INC-001"
+    assert "executiveSummary" in j
+
+
+def test_block_ip(client: TestClient, auth_headers: dict[str, str]):
+    r = client.post(
+        "/api/network/block-ip",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"ip": "185.15.2.1", "reason": "Test block", "alertId": "ALT-0001"},
+    )
+    assert r.status_code == 200
+    j = r.json()
+    assert j["ip"] == "185.15.2.1"
+    assert j["ruleId"].startswith("FW-RULE-")
+    assert j["appliedAt"]
+
+
+def test_devices_filters(client: TestClient):
+    by_wing = client.get("/api/devices?guest=true&wing=ICU")
+    assert by_wing.status_code == 200
+    assert by_wing.json()["items"]
+    assert all(d["wing"] == "ICU" for d in by_wing.json()["items"])
+
+    by_status = client.get("/api/devices?guest=true&status=NORMAL")
+    assert by_status.status_code == 200
+    assert all(d["status"] == "NORMAL" for d in by_status.json()["items"])
+
+    by_type = client.get("/api/devices?guest=true&type=MRI")
+    assert by_type.status_code == 200
+    assert all(d["type"] == "MRI" for d in by_type.json()["items"])
+
+
+def test_device_detail_404(client: TestClient):
+    r = client.get("/api/devices/dev-NOT-REAL?guest=true")
+    assert r.status_code == 404
+    body = r.json().get("detail", {})
+    assert body.get("code") == "DEVICE_NOT_FOUND"
+
+
+def test_fl_drift_shape(client: TestClient):
+    r = client.get("/api/fl/drift?guest=true")
+    assert r.status_code == 200
+    entries = r.json()["entries"]
+    assert isinstance(entries, list)
+    assert entries
+    e = entries[0]
+    for k in ("clientId", "department", "roundsAgo", "driftScore", "baselineAccuracy", "currentAccuracy", "flagged"):
+        assert k in e
+
+
+def test_fl_models_one_active(client: TestClient):
+    r = client.get("/api/fl/models?guest=true")
+    assert r.status_code == 200
+    models = r.json()["models"]
+    active = [m for m in models if m["active"]]
+    assert len(active) == 1
+
+
+def test_conversation_history_unknown_returns_empty(client: TestClient):
+    r = client.get("/api/bastionbot/conversations/conv-does-not-exist?guest=true")
+    assert r.status_code == 200
+    assert r.json()["conversationId"] == "conv-does-not-exist"
+    assert r.json()["messages"] == []
+
+
+def test_patch_incident_invalid_status(client: TestClient, auth_headers: dict[str, str]):
+    r = client.patch(
+        "/api/incidents/INC-001",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"status": "NOT_A_STATUS", "assignee": "JP", "notes": "x"},
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "INVALID_STATUS"
+
+
+def test_patch_incident_404(client: TestClient, auth_headers: dict[str, str]):
+    r = client.patch(
+        "/api/incidents/INC-NOT-REAL",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"status": "RESPONDING", "assignee": "JP", "notes": "x"},
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "INCIDENT_NOT_FOUND"
+
+
+def test_patch_playbook_step_404(client: TestClient, auth_headers: dict[str, str]):
+    r = client.patch(
+        "/api/incidents/INC-001/playbook/steps/not-a-step",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"status": "COMPLETED", "notes": "x"},
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "PLAYBOOK_STEP_NOT_FOUND"
+
+
+def test_patch_playbook_step_invalid_status_maps_to_not_found(client: TestClient, auth_headers: dict[str, str]):
+    r = client.patch(
+        "/api/incidents/INC-001/playbook/steps/s6",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"status": "INVALID", "notes": "x"},
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "PLAYBOOK_STEP_NOT_FOUND"
+
+
+def test_halt_playbook_404(client: TestClient, auth_headers: dict[str, str]):
+    r = client.post(
+        "/api/incidents/INC-NOT-REAL/playbook/halt",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"reason": "x"},
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "INCIDENT_NOT_FOUND"
+
+
+def test_forensics_generate_rca_404(client: TestClient, auth_headers: dict[str, str]):
+    r = client.post(
+        "/api/forensics/rca",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"incidentId": "INC-NOT-REAL"},
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "INCIDENT_NOT_FOUND"
+
+
+def test_forensics_upload_requires_file_and_device_id(client: TestClient, auth_headers: dict[str, str]):
+    missing_file = client.post("/api/forensics/samples", headers=auth_headers, data={"deviceId": "dev-02"})
+    assert missing_file.status_code == 422
+
+    file_bytes = b"x"
+    files = {"file": ("sample.bin", io.BytesIO(file_bytes), "application/octet-stream")}
+    missing_device = client.post("/api/forensics/samples", headers=auth_headers, files=files)
+    assert missing_device.status_code == 422
+
+
+def test_block_ip_validation(client: TestClient, auth_headers: dict[str, str]):
+    r = client.post(
+        "/api/network/block-ip",
+        headers={**auth_headers, "Content-Type": "application/json"},
+        json={"ip": "185.15.2.1"},
+    )
+    assert r.status_code == 422
+
