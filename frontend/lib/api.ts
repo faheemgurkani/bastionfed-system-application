@@ -62,3 +62,10 @@ export function eventsSourceUrl(token: string | null, isGuest: boolean): string 
   else if (token) u.searchParams.set('token', token);
   return u.toString();
 }
+
+export function flEventsSourceUrl(token: string | null, isGuest: boolean): string {
+  const u = new URL(apiUrl('/api/fl-events'));
+  if (isGuest) u.searchParams.set('guest', 'true');
+  else if (token) u.searchParams.set('token', token);
+  return u.toString();
+}

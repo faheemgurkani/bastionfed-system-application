@@ -6,10 +6,21 @@ from fastapi import APIRouter, Depends, status
 from app.auth.deps import AuthContext, require_read_auth, require_user
 from app.errors import api_error
 from app.models.api import IncidentListResponse, PlaybookRunResponse
-from app.models.domain import AuditAction
+from app.models.domain import AuditAction, Incident
 from app.store.memory import state
 
 router = APIRouter(tags=["incidents"])
+
+
+@router.get("/incidents/{incident_id}", response_model=Incident)
+def get_incident(
+    incident_id: str,
+    _auth: Annotated[AuthContext, Depends(require_read_auth)],
+):
+    inc = state.get_incident(incident_id)
+    if not inc:
+        raise api_error(status.HTTP_404_NOT_FOUND, "Incident not found", "INCIDENT_NOT_FOUND")
+    return inc
 
 
 @router.get("/incidents", response_model=IncidentListResponse)

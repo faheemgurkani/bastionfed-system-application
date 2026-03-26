@@ -1,9 +1,57 @@
 'use client';
 
-import { MOCK_AUDIT_LOGS } from '@/lib/mock-data';
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/contexts/auth-context';
+import { apiFetchJson, ApiError } from '@/lib/api';
+import type { AuditLog } from '@/lib/types';
 import { ShieldAlert, LogIn, Settings, Database, Server, AlertTriangle } from 'lucide-react';
 
 export function AuditLogTable() {
+  const { user, loading: authLoading, isGuest } = useAuth();
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        let data: { items: AuditLog[]; nextCursor: string | null; total: number };
+        if (isGuest) {
+          data = await apiFetchJson('/api/audit/logs?limit=10', { guest: true });
+        } else if (user) {
+          const token = await user.getIdToken();
+          data = await apiFetchJson('/api/audit/logs?limit=10', {
+            headers: { Authorization: `Bearer ${token}` },
+            // Fetch first page only; pagination UI can be added later.
+          });
+        } else {
+          return;
+        }
+
+        if (cancelled) return;
+        setLogs(data.items);
+        setTotal(data.total);
+        setNextCursor(data.nextCursor);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof ApiError ? e.message : 'Failed to load audit logs');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isGuest, user]);
+
   const getActionIcon = (action: string) => {
     if (action.includes('LOGIN') || action.includes('AUTH')) return <LogIn className="w-4 h-4" />;
     if (action.includes('CONFIG') || action.includes('UPDATE')) return <Settings className="w-4 h-4" />;
@@ -16,6 +64,11 @@ export function AuditLogTable() {
   return (
     <div className="bg-bg-surface border border-border-default rounded-lg h-full flex flex-col overflow-hidden">
       <div className="overflow-x-auto">
+        {error && (
+          <p className="p-3 text-sm font-mono text-severity-high border-b border-border-default bg-bg-base">
+            {error}
+          </p>
+        )}
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-bg-base border-b border-border-default">
@@ -28,7 +81,14 @@ export function AuditLogTable() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border-default">
-            {MOCK_AUDIT_LOGS.map((log) => (
+            {loading && logs.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-4 text-text-secondary text-sm font-mono">
+                  Loading…
+                </td>
+              </tr>
+            ) : (
+              logs.map((log) => (
               <tr key={log.id} className="hover:bg-bg-overlay transition-colors">
                 <td className="p-4 font-mono text-[11px] text-text-secondary whitespace-nowrap">
                   {new Date(log.timestamp).toLocaleString()}
@@ -62,16 +122,26 @@ export function AuditLogTable() {
                   </span>
                 </td>
               </tr>
-            ))}
+              ))
+            )}
           </tbody>
         </table>
       </div>
       
       <div className="p-4 border-t border-border-default bg-bg-base flex justify-between items-center mt-auto">
-        <span className="text-xs text-text-muted font-mono">Showing 1-10 of 1,248 logs</span>
+        <span className="text-xs text-text-muted font-mono">
+          Showing 1-{Math.min(logs.length, 10)} of {total} logs
+        </span>
         <div className="flex gap-2">
-          <button className="px-3 py-1 border border-border-default rounded text-xs text-text-muted hover:text-white transition-colors disabled:opacity-50">Previous</button>
-          <button className="px-3 py-1 border border-border-default rounded text-xs text-text-muted hover:text-white transition-colors">Next</button>
+          <button className="px-3 py-1 border border-border-default rounded text-xs text-text-muted hover:text-white transition-colors disabled:opacity-50" disabled>
+            Previous
+          </button>
+          <button
+            className="px-3 py-1 border border-border-default rounded text-xs text-text-muted hover:text-white transition-colors disabled:opacity-50"
+            disabled={!nextCursor}
+          >
+            Next
+          </button>
         </div>
       </div>
     </div>

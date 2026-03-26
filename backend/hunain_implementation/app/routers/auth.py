@@ -8,6 +8,8 @@ from app.models.api import (
     BastionBotChatRequest,
     BastionBotChatResponse,
     ConversationListResponse,
+    AuthSessionRequest,
+    AuthSessionResponse,
 )
 from app.models.domain import AuditAction
 from app.store.memory import state
@@ -20,6 +22,26 @@ def list_bastionbot_conversations(
     _auth: Annotated[AuthContext, Depends(require_read_auth)],
 ):
     return ConversationListResponse(conversations=state.list_conversations())
+
+
+@router.post("/auth/session", response_model=AuthSessionResponse)
+def auth_session(
+    body: AuthSessionRequest,
+    _auth: Annotated[AuthContext, Depends(require_user)],
+):
+    u = state.upsert_session_user(
+        uid=body.uid,
+        email=body.email,
+        display_name=body.display_name,
+        photo_url=body.photo_url,
+    )
+    state.append_audit(
+        actor=body.email or body.uid,
+        action=AuditAction.USER_LOGIN,
+        target=body.uid,
+        result="SUCCESS",
+    )
+    return AuthSessionResponse(uid=body.uid, created_at=u.created_at, last_login_at=u.last_login_at)
 
 
 @router.post("/bastionbot/chat", response_model=BastionBotChatResponse)

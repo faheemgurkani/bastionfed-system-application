@@ -42,6 +42,26 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
+## 4. Run the unified FastAPI backend (single port)
+
+This repo originally had 3 backend “forks”. The frontend is now integrated against a single unified backend implementation (based on `backend/hunain_implementation`).
+
+```bash
+cd backend/hunain_implementation
+python -m venv .venv
+source .venv/bin/activate  
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+The API serves at `http://localhost:8000`. Ensure `frontend/.env.local` contains:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+---
+
 ## Expected environment variables
 
 Your `.env.local` should contain the following keys (values provided by the frontend lead):

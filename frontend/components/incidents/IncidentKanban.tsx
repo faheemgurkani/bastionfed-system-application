@@ -2,14 +2,15 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { MOCK_INCIDENTS } from "@/lib/mock-data";
 import { Incident } from "@/lib/types";
 
 interface IncidentKanbanProps {
+  incidents: Incident[];
   onSelectIncident: (incident: Incident) => void;
+  loading?: boolean;
 }
 
-export function IncidentKanban({ onSelectIncident }: IncidentKanbanProps) {
+export function IncidentKanban({ incidents, onSelectIncident, loading }: IncidentKanbanProps) {
   const columns = ["NEW", "TRIAGING", "RESPONDING", "RESOLVED", "POST_MORTEM"];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -94,9 +95,7 @@ export function IncidentKanban({ onSelectIncident }: IncidentKanbanProps) {
         className="flex gap-4 flex-1 overflow-x-auto no-scrollbar pb-2"
       >
         {columns.map((col) => {
-          const columnIncidents = MOCK_INCIDENTS.filter(
-            (inc) => inc.status === col,
-          );
+          const columnIncidents = incidents.filter((inc) => inc.status === col);
 
           return (
             <div
@@ -113,7 +112,12 @@ export function IncidentKanban({ onSelectIncident }: IncidentKanbanProps) {
               </div>
 
               <div className="p-3 flex flex-col gap-3 overflow-y-auto flex-1">
-                {columnIncidents.map((inc) => (
+                {loading ? (
+                  <div className="text-text-secondary text-sm font-mono p-2">Loading…</div>
+                ) : columnIncidents.length === 0 ? (
+                  <div className="text-text-secondary text-sm font-mono p-2">No incidents</div>
+                ) : (
+                  columnIncidents.map((inc) => (
                   <div
                     key={inc.id}
                     onClick={() => onSelectIncident(inc)}
@@ -149,7 +153,8 @@ export function IncidentKanban({ onSelectIncident }: IncidentKanbanProps) {
                       </div>
                     </div>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           );
