@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/auth-context';
-import { apiFetchJson, ApiError } from '@/lib/api';
+import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -31,20 +31,26 @@ export function RoundStatusBanner() {
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
+    let ac = new AbortController();
 
     async function load() {
+      ac.abort();
+      ac = new AbortController();
+      const sig = ac.signal;
       try {
         if (isGuest) {
-          const data = await apiFetchJson<FLStatus>('/api/fl/status', { guest: true });
+          const data = await apiFetchJson<FLStatus>('/api/fl/status', { guest: true, signal: sig });
           if (!cancelled) setStatus(data);
         } else if (user) {
           const token = await user.getIdToken();
           const data = await apiFetchJson<FLStatus>('/api/fl/status', {
             headers: { Authorization: `Bearer ${token}` },
+            signal: sig,
           });
           if (!cancelled) setStatus(data);
         }
       } catch (e) {
+        if (isAbortError(e)) return;
         if (!cancelled && e instanceof ApiError) console.warn('FL status:', e.message);
       }
     }
@@ -53,6 +59,7 @@ export function RoundStatusBanner() {
     const id = setInterval(load, 30_000);
     return () => {
       cancelled = true;
+      ac.abort();
       clearInterval(id);
     };
   }, [authLoading, isGuest, user]);

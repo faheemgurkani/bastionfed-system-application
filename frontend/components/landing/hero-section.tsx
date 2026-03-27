@@ -14,8 +14,10 @@ import dynamic from "next/dynamic";
 
 const HeroWebGL = dynamic(
   () =>
-    import("@/components/landing/hero-webgl").then((m) => ({ default: m.HeroWebGL })),
-  { ssr: false }
+    import("@/components/landing/hero-webgl").then((m) => ({
+      default: m.HeroWebGL,
+    })),
+  { ssr: false },
 );
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
@@ -82,14 +84,9 @@ export function HeroSection() {
           </span>
         </div>
 
-        {/* RIGHT — WebGL 3D panel (absolutely positioned, does not affect left content) */}
-        <div className="absolute right-0 top-[9%] w-[52%] h-full hidden lg:block pointer-events-none z-0">
+        {/* RIGHT — WebGL card: xl+ only so it hides when viewport narrows (resize, devtools docked, etc.) */}
+        <div className="pointer-events-auto absolute top-[calc(50%+0.75rem)] z-30 hidden aspect-[2/3] h-auto max-h-[min(62vh,38rem)] w-[min(27rem,min(35vw,calc(100vw-4rem)))] max-w-full -translate-y-1/2 xl:block xl:right-24 xl:max-w-[min(27rem,calc(100%-1.5rem))]">
           <HeroWebGL />
-          <div className="absolute bottom-8 right-8 z-20">
-            <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-white/30">
-              Interactive · Move cursor
-            </span>
-          </div>
         </div>
 
         {/* LEFT — original content, untouched */}
@@ -130,12 +127,12 @@ export function HeroSection() {
               />
               <BitmapChevron className="transition-transform duration-[400ms] ease-in-out group-hover:rotate-45" />
             </button>
-            <button
-              type="button"
+            <a
+              href="#colophon"
               className="font-mono text-sm uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors duration-200"
             >
               Schedule a Demo
-            </button>
+            </a>
           </div>
         </div>
       </section>
@@ -156,7 +153,7 @@ export function HeroSection() {
           />
 
           {/* Panel */}
-          <div className="relative z-10 w-full max-w-xl">
+          <div className="relative z-10 w-full max-w-3xl">
             {/* Close button */}
             <button
               onClick={closeModal}

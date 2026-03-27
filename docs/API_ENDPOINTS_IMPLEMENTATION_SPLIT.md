@@ -82,6 +82,8 @@ Goal: each member gets **12 endpoints total** with the same difficulty mix: **6 
   - POST `/api/devices/{device_id}/quarantine`
   - GET `/api/audit/verify`
 
+**Integration note:** The Next.js UI wired for these routes also calls endpoints assigned to **Hunain** and **Hammad** (e.g. incident **list**, FL **list** + **`/api/fl-events`**, audit **log list**). For end-to-end behavior, those routes must exist on the same `NEXT_PUBLIC_API_URL` service (or the client must use multiple API bases). See [`docs/FAHEEM/FAHEEM_BACKEND_TODO.md`](./FAHEEM/FAHEEM_BACKEND_TODO.md) **§2** for the dependency table and implementer requirements.
+
 ### Hunain (12 total = 6 easy / 3 medium / 3 hard)
 
 - **Easy (6)**

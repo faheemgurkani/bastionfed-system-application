@@ -1,4 +1,7 @@
+"""SSE stream for FL client patches (PRD §4.2). Same synthetic pattern as alert /api/events for phase-1 dev."""
+
 import asyncio
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -7,32 +10,24 @@ from fastapi.responses import StreamingResponse
 from app.auth.deps import AuthContext, require_sse_auth
 from app.store.memory import state
 
-router = APIRouter(tags=["events"])
+router = APIRouter(tags=["fl"])
 
-# Tunable: production can increase interval (PRD ~4s between detections; keep-alive ~15s).
-_SSE_TICK_S = 1.0
+_SSE_TICK_S = 0.35
 _KEEPALIVE_EVERY_S = 15.0
-_ALERT_EVERY_S = 60.0
 
 
-@router.get("/events")
-async def alert_event_stream(_auth: Annotated[AuthContext, Depends(require_sse_auth)]):
+@router.get("/fl-events")
+async def fl_client_event_stream(_auth: Annotated[AuthContext, Depends(require_sse_auth)]):
     async def generate():
         yield ": keep-alive\n\n"
         ping_accum = 0.0
-        alert_accum = 0.0
         while True:
             await asyncio.sleep(_SSE_TICK_S)
             ping_accum += _SSE_TICK_S
-            alert_accum += _SSE_TICK_S
-            
             if ping_accum >= _KEEPALIVE_EVERY_S:
                 yield ": keep-alive\n\n"
                 ping_accum = 0.0
-                
-            if alert_accum >= _ALERT_EVERY_S:
-                alert = state.next_streaming_alert()
-                yield f"data: {alert.model_dump_json(by_alias=True)}\n\n"
-                alert_accum = 0.0
+            patch = state.next_streaming_fl_patch()
+            yield f"data: {json.dumps(patch)}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")

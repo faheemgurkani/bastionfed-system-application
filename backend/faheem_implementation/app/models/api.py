@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
-from app.models.domain import Alert, MalwareSample
+from app.models.domain import Alert, FLClient, Incident, MalwareSample, AuditLog
 
 
 class CamelRequest(BaseModel):
@@ -18,6 +18,22 @@ class MalwareSampleListResponse(CamelRequest):
     items: list[MalwareSample]
     next_cursor: str | None = Field(None, alias="nextCursor")
     total: int
+
+
+class IncidentListResponse(CamelRequest):
+    items: list[Incident]
+    next_cursor: str | None = Field(None, alias="nextCursor")
+    total: int
+
+
+class AuditLogListResponse(CamelRequest):
+    items: list[AuditLog]
+    next_cursor: str | None = Field(None, alias="nextCursor")
+    total: int
+
+
+class FLClientsListResponse(CamelRequest):
+    clients: list[FLClient]
 
 
 class AuthSessionRequest(CamelRequest):

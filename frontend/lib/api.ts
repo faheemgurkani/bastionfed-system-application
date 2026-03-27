@@ -11,6 +11,11 @@ export function apiUrl(path: string): string {
   return `${API_BASE_URL.replace(/\/$/, '')}${p}`;
 }
 
+/** True when `fetch` was aborted (React Strict Mode / effect cleanup). */
+export function isAbortError(e: unknown): boolean {
+  return e instanceof DOMException && e.name === 'AbortError';
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,

@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Alert } from '@/lib/types';
-import { apiFetchJson, ApiError, eventsSourceUrl } from '@/lib/api';
+import { apiFetchJson, ApiError, eventsSourceUrl, isAbortError } from '@/lib/api';
 
 type AlertListResponse = {
   items: Alert[];
@@ -36,18 +36,23 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     if (authLoading) return;
 
     let cancelled = false;
+    const ac = new AbortController();
 
     async function load() {
       setAlertsLoading(true);
       setAlertsError(null);
       try {
         if (isGuest) {
-          const data = await apiFetchJson<AlertListResponse>('/api/alerts', { guest: true });
+          const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
+            guest: true,
+            signal: ac.signal,
+          });
           if (!cancelled) setAlerts(data.items);
         } else if (user) {
           const token = await user.getIdToken();
           const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
             headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
           });
           if (!cancelled) setAlerts(data.items);
         } else {
@@ -57,6 +62,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (e) {
+        if (isAbortError(e)) return;
         if (!cancelled) {
           const msg = e instanceof ApiError ? e.message : 'Failed to load alerts';
           setAlertsError(msg);
@@ -69,6 +75,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
     void load();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   }, [authLoading, isGuest, user]);
 

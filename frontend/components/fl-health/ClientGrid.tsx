@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import type { FLClient } from "@/lib/types";
 import { useFLClients } from "@/contexts/fl-clients-context";
 import { useAuth } from "@/contexts/auth-context";
-import { apiFetchJson, ApiError } from "@/lib/api";
+import { apiFetchJson, ApiError, isAbortError } from "@/lib/api";
 import { TriangleAlert, X } from "lucide-react";
 
 const STATUS_ORDER: Record<string, number> = {
@@ -40,6 +40,7 @@ export function ClientGrid() {
   useEffect(() => {
     if (authLoading || !detailClient) return;
     let cancelled = false;
+    const ac = new AbortController();
 
     async function loadDetail() {
       try {
@@ -47,17 +48,20 @@ export function ClientGrid() {
         if (isGuest) {
           data = await apiFetchJson<FLClient>(`/api/fl/clients/${encodeURIComponent(detailClient!.id)}`, {
             guest: true,
+            signal: ac.signal,
           });
         } else if (user) {
           const token = await user.getIdToken();
           data = await apiFetchJson<FLClient>(`/api/fl/clients/${encodeURIComponent(detailClient!.id)}`, {
             headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
           });
         } else {
           return;
         }
         if (!cancelled) setDetailClient(data);
       } catch (e) {
+        if (isAbortError(e)) return;
         if (!cancelled && e instanceof ApiError) console.warn("FL client detail:", e.message);
       }
     }
@@ -65,6 +69,7 @@ export function ClientGrid() {
     void loadDetail();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   }, [authLoading, detailClient?.id, isGuest, user]);
 

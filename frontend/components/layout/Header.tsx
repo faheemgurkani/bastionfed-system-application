@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useActiveRoute } from '@/hooks/use-active-route';
@@ -161,16 +160,6 @@ export function Header() {
           <div className="w-20 h-8 bg-bg-surface rounded animate-pulse" aria-hidden />
         ) : user ? (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-bg-surface border border-border-default overflow-hidden relative flex-shrink-0">
-              {user.photoURL ? (
-                <Image src={user.photoURL} alt={user.displayName ?? 'User'} fill className="object-cover grayscale" referrerPolicy="no-referrer" sizes="32px" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs font-mono text-text-muted">
-                  {(user.displayName ?? user.email ?? 'U').charAt(0).toUpperCase()}
-                </div>
-              )}
-            </div>
-            <span className="text-sm text-text-secondary max-w-[120px] truncate">{user.displayName ?? user.email ?? 'User'}</span>
             <button onClick={signOutUser} className="p-1.5 text-text-muted hover:text-white transition-colors" title="Sign out">
               <LogOut className="w-4 h-4" />
             </button>

@@ -31,6 +31,7 @@ from app.routers import (  # noqa: E402
     devices,
     events,
     fl,
+    fl_events,
     forensics,
     incidents,
 )
@@ -38,6 +39,7 @@ from app.routers import (  # noqa: E402
 app.include_router(alerts.router, prefix="/api")
 app.include_router(incidents.router, prefix="/api")
 app.include_router(fl.router, prefix="/api")
+app.include_router(fl_events.router, prefix="/api")
 app.include_router(forensics.router, prefix="/api")
 app.include_router(devices.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")

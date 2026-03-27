@@ -6,7 +6,7 @@ import { SampleList } from '@/components/forensics/SampleList';
 import { AnalysisReport } from '@/components/forensics/AnalysisReport';
 import { MalwareSample } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
-import { apiFetchJson, ApiError } from '@/lib/api';
+import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 
 type SampleListResponse = {
   items: MalwareSample[];
@@ -23,17 +23,22 @@ export default function ForensicsPage() {
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
+    const ac = new AbortController();
 
     async function load() {
       setError(null);
       try {
         let data: SampleListResponse;
         if (isGuest) {
-          data = await apiFetchJson<SampleListResponse>('/api/forensics/samples', { guest: true });
+          data = await apiFetchJson<SampleListResponse>('/api/forensics/samples', {
+            guest: true,
+            signal: ac.signal,
+          });
         } else if (user) {
           const token = await user.getIdToken();
           data = await apiFetchJson<SampleListResponse>('/api/forensics/samples', {
             headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
           });
         } else {
           return;
@@ -46,6 +51,7 @@ export default function ForensicsPage() {
           });
         }
       } catch (e) {
+        if (isAbortError(e)) return;
         if (!cancelled) setError(e instanceof ApiError ? e.message : 'Failed to load samples');
       }
     }
@@ -53,6 +59,7 @@ export default function ForensicsPage() {
     void load();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   }, [authLoading, isGuest, user]);
 

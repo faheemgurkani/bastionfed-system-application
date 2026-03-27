@@ -4,7 +4,7 @@ import { Incident } from '@/lib/types';
 import { ArrowLeft, Search, Bell, Play, Lock, User, CheckCircle, Loader2, Circle, Download, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { apiFetchJson, ApiError } from '@/lib/api';
+import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 
 interface IncidentDetailProps {
   incident: Incident;
@@ -23,6 +23,7 @@ export function IncidentDetail({ incident: initialIncident, onBack }: IncidentDe
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
+    const ac = new AbortController();
 
     async function load() {
       try {
@@ -30,17 +31,20 @@ export function IncidentDetail({ incident: initialIncident, onBack }: IncidentDe
         if (isGuest) {
           data = await apiFetchJson<Incident>(`/api/incidents/${encodeURIComponent(initialIncident.id)}`, {
             guest: true,
+            signal: ac.signal,
           });
         } else if (user) {
           const token = await user.getIdToken();
           data = await apiFetchJson<Incident>(`/api/incidents/${encodeURIComponent(initialIncident.id)}`, {
             headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
           });
         } else {
           return;
         }
         if (!cancelled) setIncident(data);
       } catch (e) {
+        if (isAbortError(e)) return;
         if (!cancelled && e instanceof ApiError) console.warn('Incident detail:', e.message);
       }
     }
@@ -48,6 +52,7 @@ export function IncidentDetail({ incident: initialIncident, onBack }: IncidentDe
     void load();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   }, [authLoading, initialIncident.id, isGuest, user]);
 

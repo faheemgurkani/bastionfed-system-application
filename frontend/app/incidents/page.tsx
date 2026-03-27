@@ -7,7 +7,7 @@ import { IncidentDetail } from '@/components/incidents/IncidentDetail';
 import { PlaybookLibrary } from '@/components/incidents/PlaybookLibrary';
 import { Incident } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
-import { apiFetchJson, ApiError } from '@/lib/api';
+import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 
 type IncidentListResponse = {
   items: Incident[];
@@ -26,6 +26,7 @@ export default function IncidentsPage() {
     if (authLoading) return;
 
     let cancelled = false;
+    const ac = new AbortController();
 
     async function loadIncidents() {
       setIncidentsLoading(true);
@@ -34,11 +35,15 @@ export default function IncidentsPage() {
       try {
         let data: IncidentListResponse;
         if (isGuest) {
-          data = await apiFetchJson<IncidentListResponse>('/api/incidents', { guest: true });
+          data = await apiFetchJson<IncidentListResponse>('/api/incidents', {
+            guest: true,
+            signal: ac.signal,
+          });
         } else if (user) {
           const token = await user.getIdToken();
           data = await apiFetchJson<IncidentListResponse>('/api/incidents', {
             headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
           });
         } else {
           return;
@@ -48,9 +53,10 @@ export default function IncidentsPage() {
         setIncidents(data.items);
         setSelectedIncident((prev) => {
           if (prev && data.items.some((inc) => inc.id === prev.id)) return prev;
-          return data.items[0] ?? null;
+          return null;
         });
       } catch (e) {
+        if (isAbortError(e)) return;
         if (!cancelled) setIncidentsError(e instanceof ApiError ? e.message : 'Failed to load incidents');
       } finally {
         if (!cancelled) setIncidentsLoading(false);
@@ -60,6 +66,7 @@ export default function IncidentsPage() {
     void loadIncidents();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   }, [authLoading, isGuest, user]);
 

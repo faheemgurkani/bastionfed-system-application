@@ -14,8 +14,10 @@ Step-by-step commands for **macOS / Linux** from the repo root
 
 ## 1. Backend: venv, dependencies, automated tests
 
+Faheem’s FastAPI app and tests live under **`backend/faheem_implementation/`** (not the `backend/` folder root).
+
 ```bash
-cd /Users/muhammadfaheem/Documents/GitHub/personal/bastionfed-system-application/backend
+cd /Users/muhammadfaheem/Documents/GitHub/personal/bastionfed-system-application/backend/faheem_implementation
 ```
 
 Create / refresh virtualenv (optional if `.venv` already exists):
@@ -36,26 +38,31 @@ pytest tests/test_faheem_endpoints.py -v
 
 ### Expected output when tests pass
 
-You should see **33 collected** items (one file: `tests/test_faheem_endpoints.py`), **100% passed**, and a quick in-process runtime (often around **0.1–1s**). Example from a successful run (versions may differ slightly):
+You should see **36 passed** from `tests/test_faheem_endpoints.py` (plus **4 skipped** integration tests if `LIVE_SERVER_URL` is unset — see `tests/test_live_server.py`). Runtime is usually **under ~1s** in-process. Example fragment:
 
 ```text
 ============ test session starts =============
 platform darwin -- Python 3.11.9, pytest-9.0.2, pluggy-1.6.0 -- .../backend/.venv/bin/python3.11
 cachedir: .pytest_cache
-rootdir: .../bastionfed-system-application/backend
+rootdir: .../bastionfed-system-application/backend/faheem_implementation
 configfile: pytest.ini
 plugins: anyio-4.12.1
-collected 33 items
+collected 40 items
+# ... test_faheem_endpoints + skipped test_live_server when LIVE_SERVER_URL unset ...
 
-tests/test_faheem_endpoints.py::test_health PASSED [  3%]
-tests/test_faheem_endpoints.py::test_openapi_contains_faheem_paths PASSED [  6%]
-# ... (remaining tests in the same file) ...
-tests/test_faheem_endpoints.py::test_events_unauthenticated PASSED [100%]
-
-============= 33 passed in 0.14s =============
+============= 36 passed, 4 skipped in 0.2s =============
 ```
 
-If `collected` is not **33**, or any test **FAILED** / **ERROR**, fix the backend or test env before relying on the suite as green.
+**Optional — prove the running Uvicorn matches the code under test:** with the server up,
+
+```bash
+export LIVE_SERVER_URL=http://127.0.0.1:8000
+pytest tests/test_live_server.py -v
+```
+
+That file asserts **`/health`**, OpenAPI paths, and **SSE bodies** for `/api/events` and `/api/fl-events` over real TCP (what in-process `TestClient` cannot do reliably for infinite streams).
+
+If core tests **FAILED** / **ERROR**, fix the backend or env before relying on the suite as green.
 
 Quiet summary:
 
@@ -67,7 +74,7 @@ pytest tests/test_faheem_endpoints.py -q
 
 ## 2. Backend: run the API server
 
-Still in `backend/` with venv activated:
+Still in **`backend/faheem_implementation/`** with venv activated:
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -102,6 +109,8 @@ npm run dev
 
 App is usually **http://localhost:3000**. The UI calls the FastAPI base from `NEXT_PUBLIC_API_URL`.
 
+**End-to-end caveat:** Several screens also call **Hunain**/**Hammad** routes (`GET /api/incidents`, `GET /api/fl/clients`, `GET /api/fl-events`, `GET /api/audit/logs`, …). Faheem-only **:8000** is enough for **pytest** and Faheem-owned flows; **full** UI coverage needs a **merged** FastAPI (or those routes implemented on the same host). See [`FAHEEM_BACKEND_TODO.md`](./FAHEEM_BACKEND_TODO.md) **§2**.
+
 ---
 
 ## 4. Manual smoke checks (browser + curl)
@@ -121,7 +130,7 @@ In the browser: sign in or **Continue as guest**, then open **Alerts**, **Dashbo
 
 ## 5. What the automated tests cover
 
-See [`backend/tests/test_faheem_endpoints.py`](../backend/tests/test_faheem_endpoints.py). They exercise:
+See [`backend/faheem_implementation/tests/test_faheem_endpoints.py`](../backend/faheem_implementation/tests/test_faheem_endpoints.py). They exercise:
 
 - OpenAPI path registration for all Faheem routes  
 - **GET** auth (guest vs missing auth)  
@@ -138,4 +147,6 @@ See [`backend/tests/test_faheem_endpoints.py`](../backend/tests/test_faheem_endp
 ## Related docs
 
 - [`FAHEEM_BACKEND_IMPLEMENTATION.md`](./FAHEEM_BACKEND_IMPLEMENTATION.md) — what was built  
-- [`BACKEND_PRD.md`](./BACKEND_PRD.md) — full API contract  
+- [`FAHEEM_GAP_REMEDIATION_LOG.md`](./FAHEEM_GAP_REMEDIATION_LOG.md) — detailed log of route/test/frontend/doc fixes (single-host dev, `LIVE_SERVER_URL`, abort controllers)  
+- [`FAHEEM_BACKEND_TODO.md`](./FAHEEM_BACKEND_TODO.md) — cross-team API dependencies (**§2**), gaps, UI checklist  
+- [`BACKEND_PRD.md`](../BACKEND_PRD.md) — full API contract  

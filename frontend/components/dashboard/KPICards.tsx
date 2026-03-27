@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/auth-context';
-import { apiFetchJson, ApiError } from '@/lib/api';
+import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 import { useEffect, useState } from 'react';
 
 export type DashboardKpis = {
@@ -23,22 +23,28 @@ export function KPICards() {
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
+    const ac = new AbortController();
 
     async function load() {
       try {
         if (isGuest) {
-          const data = await apiFetchJson<DashboardKpis>('/api/dashboard/kpis', { guest: true });
+          const data = await apiFetchJson<DashboardKpis>('/api/dashboard/kpis', {
+            guest: true,
+            signal: ac.signal,
+          });
           if (!cancelled) setKpis(data);
         } else if (user) {
           const token = await user.getIdToken();
           const data = await apiFetchJson<DashboardKpis>('/api/dashboard/kpis', {
             headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
           });
           if (!cancelled) setKpis(data);
         } else {
           if (!cancelled) setKpis(null);
         }
       } catch (e) {
+        if (isAbortError(e)) return;
         if (!cancelled) {
           setError(e instanceof ApiError ? e.message : 'Failed to load KPIs');
           setKpis(null);
@@ -49,6 +55,7 @@ export function KPICards() {
     void load();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   }, [authLoading, isGuest, user]);
 

@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { FLClient } from '@/lib/types';
 import { MOCK_FL_CLIENTS } from '@/lib/mock-data';
 import { useAuth } from '@/contexts/auth-context';
-import { apiFetchJson, ApiError, flEventsSourceUrl } from '@/lib/api';
+import { apiFetchJson, ApiError, flEventsSourceUrl, isAbortError } from '@/lib/api';
 
 type FLClientsContextValue = FLClient[];
 
@@ -17,17 +17,22 @@ export function FLClientsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
+    const ac = new AbortController();
 
     async function loadClients() {
       try {
         type FLClientsResponse = { clients: FLClient[] };
         let data: FLClientsResponse;
         if (isGuest) {
-          data = await apiFetchJson<FLClientsResponse>('/api/fl/clients', { guest: true });
+          data = await apiFetchJson<FLClientsResponse>('/api/fl/clients', {
+            guest: true,
+            signal: ac.signal,
+          });
         } else if (user) {
           const token = await user.getIdToken();
           data = await apiFetchJson<FLClientsResponse>('/api/fl/clients', {
             headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
           });
         } else {
           return;
@@ -35,6 +40,7 @@ export function FLClientsProvider({ children }: { children: React.ReactNode }) {
 
         if (!cancelled) setClients(data.clients);
       } catch (e) {
+        if (isAbortError(e)) return;
         if (!cancelled) console.warn(e instanceof ApiError ? e.message : 'Failed to load FL clients');
       }
     }
@@ -42,6 +48,7 @@ export function FLClientsProvider({ children }: { children: React.ReactNode }) {
     void loadClients();
     return () => {
       cancelled = true;
+      ac.abort();
     };
   }, [authLoading, isGuest, user]);
 

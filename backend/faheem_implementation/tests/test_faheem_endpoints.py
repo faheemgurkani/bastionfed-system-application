@@ -31,9 +31,12 @@ def test_openapi_contains_faheem_paths(client: TestClient):
     paths = r.json().get("paths", {})
     for p in (
         "/api/alerts",
+        "/api/incidents",
         "/api/incidents/{incident_id}",
         "/api/fl/status",
+        "/api/fl/clients",
         "/api/fl/clients/{client_id}",
+        "/api/fl-events",
         "/api/forensics/samples",
         "/api/forensics/rca/{rca_id}",
         "/api/dashboard/kpis",
@@ -158,6 +161,14 @@ def test_patch_alert_requires_bearer(client: TestClient):
 # --- Incidents ---
 
 
+def test_incidents_list_guest(client: TestClient):
+    r = client.get("/api/incidents?guest=true")
+    assert r.status_code == 200
+    body = r.json()
+    assert "items" in body and "total" in body and body["total"] >= 1
+    assert body["items"][0]["id"]
+
+
 def test_incident_detail(client: TestClient):
     r = client.get("/api/incidents/INC-001?guest=true")
     assert r.status_code == 200
@@ -173,6 +184,14 @@ def test_incident_404(client: TestClient):
 
 
 # --- FL ---
+
+
+def test_fl_clients_list_guest(client: TestClient):
+    r = client.get("/api/fl/clients?guest=true")
+    assert r.status_code == 200
+    body = r.json()
+    assert "clients" in body and len(body["clients"]) >= 1
+    assert body["clients"][0]["id"]
 
 
 def test_fl_status_shape(client: TestClient):
@@ -350,9 +369,12 @@ def test_audit_verify_detects_tamper(client: TestClient):
 
 
 # --- SSE ---
-# Infinite streams are awkward under ASGI test clients (body draining / aread can hang across
-# httpx/Starlette versions). We assert gated access here; OpenAPI registers `/api/events`.
-# Manual smoke: `curl -N --max-time 2 'http://localhost:8000/api/events?guest=true'`
+# Infinite streams: sync TestClient often will not iterate `iter_bytes()` (hangs). Assertions on
+# response bodies belong in `test_live_server.py` with LIVE_SERVER_URL + httpx stream, or manual curl.
+
+
+def test_fl_events_unauthenticated(client: TestClient):
+    assert client.get("/api/fl-events").status_code == 401
 
 
 def test_events_unauthenticated(client: TestClient):

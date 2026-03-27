@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useActiveRoute } from '@/hooks/use-active-route';
 import { useAuth } from '@/contexts/auth-context';
@@ -116,8 +117,12 @@ export function Sidebar() {
 
         {/* Current user */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-bg-overlay border border-border-strong flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">
-            {initials}
+          <div className="w-10 h-10 rounded-full bg-bg-overlay border border-border-strong flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 relative overflow-hidden">
+            {user?.photoURL ? (
+              <Image src={user.photoURL} alt={displayName} fill className="object-cover grayscale" referrerPolicy="no-referrer" sizes="40px" />
+            ) : (
+              initials
+            )}
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-sm text-white font-medium truncate">{displayName}</span>

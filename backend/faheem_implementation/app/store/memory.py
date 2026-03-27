@@ -192,6 +192,9 @@ class AppState:
                 return inc.model_copy(deep=True)
         return None
 
+    def list_incidents(self) -> list[Incident]:
+        return [i.model_copy(deep=True) for i in self.incidents]
+
     def append_quarantine_to_open_incidents(self, device_id: str, description: str) -> None:
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         for i, inc in enumerate(self.incidents):
@@ -402,13 +405,22 @@ class AppState:
         if base is None:
             raise RuntimeError("No alerts seeded")
         ms = int(time.time() * 1000)
-        return base.model_copy(
+        new_alert = base.model_copy(
             update={
                 "id": f"ALT-{ms}",
                 "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             },
             deep=True,
         )
+        self.alerts.append(new_alert)
+        return new_alert
+
+    def next_streaming_fl_patch(self) -> dict[str, Any]:
+        if not self.fl_clients:
+            raise RuntimeError("No FL clients seeded")
+        c = random.choice(self.fl_clients)
+        pct = round(min(100.0, max(0.0, float(c.participation_pct) + random.uniform(-1.5, 1.5))), 1)
+        return {"id": c.id, "participationPct": pct}
 
 
 state = AppState()

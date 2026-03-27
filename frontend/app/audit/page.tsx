@@ -41,6 +41,11 @@ export default function AuditPage() {
     }
   }
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [last24h, setLast24h] = useState(false);
+  const [hasRecentLogs, setHasRecentLogs] = useState(false);
+
   return (
     <AuthGate>
     <div className="flex flex-col gap-6 h-full">
@@ -67,10 +72,23 @@ export default function AuditPage() {
         <p className="text-sm font-mono text-text-secondary border border-border-default rounded-md p-3 bg-bg-surface">{verifyResult}</p>
       )}
       
-      <AuditFilters />
+      <AuditFilters 
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        activeFilter={activeFilter}
+        setActiveFilter={setActiveFilter}
+        last24h={last24h}
+        setLast24h={setLast24h}
+        hasRecentLogs={hasRecentLogs}
+      />
       
       <div className="flex-1 min-h-[500px]">
-        <AuditLogTable />
+        <AuditLogTable 
+          searchQuery={searchQuery}
+          activeFilter={activeFilter}
+          last24h={last24h}
+          onRecentLogsCheck={setHasRecentLogs}
+        />
       </div>
     </div>
     </AuthGate>
