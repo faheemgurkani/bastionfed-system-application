@@ -154,11 +154,43 @@ export interface AuditLog {
   hash: string;
 }
 
+export interface SourceCitation {
+  id: string;
+  label: string;
+  sourceType: 'doc' | 'ui' | 'api' | 'live_data';
+  path: string;
+  excerpt: string;
+}
+
 export interface BotMessage {
   id: string;
   role: 'USER' | 'BOT';
   content: string;
   timestamp: string;
+  sources: SourceCitation[];
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  preview: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface BotConversationHistoryResponse {
+  conversationId: string;
+  conversation: ConversationSummary;
+  messages: BotMessage[];
+}
+
+export interface BastionBotChatResponse {
+  message: BotMessage;
+  conversationId: string;
+  conversation: ConversationSummary;
+  sources: SourceCitation[];
+  memoryUsed: boolean;
 }
 
 /** Firestore user profile document at users/{uid} */

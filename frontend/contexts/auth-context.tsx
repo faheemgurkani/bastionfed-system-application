@@ -16,7 +16,7 @@ import {
   GoogleAuthProvider,
   type User,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type { UserProfile } from "@/lib/types";
 import { apiFetchJson } from "@/lib/api";
@@ -39,7 +39,7 @@ interface AuthContextValue {
   /** Resolves `true` if Google sign-in completed; `false` if user closed/blocked popup or a duplicate request. */
   signInWithGoogle: () => Promise<boolean>;
   signOutUser: () => Promise<void>;
-  continueAsGuest: () => void;
+  continueAsGuest: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -112,6 +112,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     googlePopupInFlight.current = true;
     try {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(GUEST_STORAGE_KEY);
+      }
+      setIsGuest(false);
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       return true;
@@ -130,17 +134,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const continueAsGuest = () => {
+  const continueAsGuest = async () => {
+    if (auth.currentUser) {
+      await firebaseSignOut(auth);
+    }
+    setUser(null);
     setIsGuest(true);
-    if (typeof window !== "undefined")
+    if (typeof window !== "undefined") {
       localStorage.setItem(GUEST_STORAGE_KEY, "true");
+    }
   };
 
   const signOutUser = async () => {
-    await firebaseSignOut(auth);
+    if (auth.currentUser) {
+      await firebaseSignOut(auth);
+    }
+    setUser(null);
     setIsGuest(false);
-    if (typeof window !== "undefined")
+    if (typeof window !== "undefined") {
       localStorage.removeItem(GUEST_STORAGE_KEY);
+    }
   };
 
   const value: AuthContextValue = {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, KeyboardEvent } from 'react';
-import { Send, Paperclip, Loader2 } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -27,18 +27,14 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
 
   return (
     <div className="relative flex items-center">
-      <button className="absolute left-3 p-2 text-text-muted hover:text-white transition-colors" disabled={isLoading}>
-        <Paperclip className="w-5 h-5" />
-      </button>
-      
       <input
         type="text"
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
         disabled={isLoading}
-        placeholder={isLoading ? "BastionBot is thinking..." : "Ask BastionBot to analyze an alert, search logs, or run a playbook..."}
-        className="w-full bg-bg-surface border border-border-default rounded-lg pl-12 pr-14 py-4 text-sm text-white placeholder:text-text-muted focus:outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        placeholder={isLoading ? "BastionBot is thinking..." : "Ask BastionBot about BastionFed features, workflows, alerts, incidents, or APIs..."}
+        className="w-full min-w-0 bg-bg-surface border border-border-default rounded-lg pl-4 pr-14 py-3 sm:py-4 text-sm text-white placeholder:text-text-muted focus:outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       />
       
       <button 

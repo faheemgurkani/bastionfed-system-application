@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useActiveRoute } from '@/hooks/use-active-route';
 import { useAuth } from '@/contexts/auth-context';
 import { MOCK_FL_ROUNDS, MOCK_FL_CLIENTS, MOCK_INCIDENTS } from '@/lib/mock-data';
-import { Map, Bell, Activity, Shield, Search, FileText, MessageSquare } from 'lucide-react';
+import { Map, Bell, Activity, Shield, Search, FileText, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const CURRENT_ROUND = MOCK_FL_ROUNDS[MOCK_FL_ROUNDS.length - 1]?.round ?? 0;
@@ -40,14 +40,21 @@ function getUserId(uid: string | undefined, isGuest: boolean): string {
   return uid.substring(0, 8).toUpperCase();
 }
 
-export function Sidebar() {
+export function Sidebar({
+  collapsed = false,
+  onToggleCollapsed,
+}: {
+  collapsed?: boolean;
+  onToggleCollapsed: () => void;
+}) {
   const activeRoute = useActiveRoute();
   const { user, isGuest } = useAuth();
+  const signedInUser = !isGuest ? user : null;
   const uptime = useUptime();
 
-  const displayName = isGuest ? 'Guest' : (user?.displayName ?? user?.email ?? 'Unknown');
-  const initials = isGuest ? 'G' : getInitials(user?.displayName ?? user?.email);
-  const userId = getUserId(user?.uid, isGuest);
+  const displayName = isGuest ? 'Guest' : (signedInUser?.displayName ?? signedInUser?.email ?? 'Unknown');
+  const initials = isGuest ? 'G' : getInitials(signedInUser?.displayName ?? signedInUser?.email);
+  const userId = getUserId(signedInUser?.uid, isGuest);
 
   const navItems = [
     { href: '/dashboard', icon: Map, label: 'Threat Map' },
@@ -60,16 +67,34 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="w-[240px] fixed left-0 top-0 h-full bg-bg-base border-r border-border-default flex flex-col z-50">
-      <div className="h-16 flex items-center px-4 border-b border-border-default">
-        <Link href="/" className="flex items-center hover:opacity-90 transition-opacity">
-          <span className="font-display font-bold text-white tracking-[0.15em] text-sm">
-            BASTIONFED
-          </span>
-        </Link>
+    <aside
+      className={`fixed left-0 top-0 z-50 flex h-full flex-col border-r border-border-default bg-bg-base transition-[width] duration-200 ${
+        collapsed ? 'w-[88px]' : 'w-[240px]'
+      }`}
+    >
+      <div className={`border-b border-border-default ${collapsed ? 'p-3' : 'pl-5 pr-1 py-5'}`}>
+        <div className={`flex ${collapsed ? 'items-center justify-center' : 'items-center justify-between gap-4'}`}>
+          {!collapsed && (
+            <Link href="/" className="flex min-w-0 flex-1 items-center pr-2 hover:opacity-90 transition-opacity">
+              <span className="truncate font-display text-[20px] font-bold leading-none text-white tracking-tight">
+                BASTIONFED
+              </span>
+            </Link>
+          )}
+          <button
+            onClick={onToggleCollapsed}
+            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-transparent bg-bg-surface text-text-secondary transition-colors hover:border-border-default hover:text-white ${
+              collapsed ? '' : '-translate-x-1'
+            }`}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
-      <nav className="flex-1 py-4 overflow-y-auto no-scrollbar">
+      <nav className={`flex-1 overflow-y-auto no-scrollbar ${collapsed ? 'py-5' : 'py-4'}`}>
         <ul className="space-y-1">
           {navItems.map((item) => {
             const isActive = activeRoute?.startsWith(item.href);
@@ -77,14 +102,17 @@ export function Sidebar() {
               <li key={item.href}>
                 <Link
                   href={item.href as any}
-                  className={`flex items-center gap-[10px] px-4 py-3 transition-all duration-150 ${
+                  className={`flex items-center transition-all duration-150 ${
+                    collapsed ? 'justify-center px-3 py-4' : 'gap-[10px] px-4 py-3'
+                  } ${
                     isActive
                       ? 'border-l-2 border-white bg-bg-overlay text-white'
                       : 'border-l-2 border-transparent text-text-secondary hover:bg-bg-overlay hover:text-white'
                   }`}
+                  title={collapsed ? item.label : undefined}
                 >
-                  <item.icon className="w-4 h-4" />
-                  <span className="text-sm font-medium">{item.label}</span>
+                  <item.icon className={collapsed ? 'w-5 h-5' : 'w-4 h-4'} />
+                  {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
                 </Link>
               </li>
             );
@@ -92,42 +120,53 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <div className="p-4 border-t border-border-default space-y-4">
+      <div className={`border-t border-border-default ${collapsed ? 'p-3' : 'p-4'} space-y-4`}>
         {/* System status block */}
-        <div className="bg-bg-overlay border border-border-strong rounded-md px-3 py-2.5 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+        {collapsed ? (
+          <div className="flex justify-center">
+            <span className="relative flex h-3 w-3 flex-shrink-0">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
             </span>
-            <span className="text-[11px] font-mono font-bold text-white tracking-widest uppercase">SYSTEM ONLINE</span>
           </div>
-          <div className="space-y-1">
-            <p className="font-mono text-[10px] text-text-muted tracking-wider">
-              UPTIME: <span className="text-white">{uptime}</span>
-            </p>
-            <p className="font-mono text-[10px] text-text-muted tracking-wider">
-              FL ROUND: <span className="text-white">{CURRENT_ROUND} ACTIVE</span>
-            </p>
-            <p className="font-mono text-[10px] text-text-muted tracking-wider">
-              INCIDENTS: <span className="text-white">{ACTIVE_MISSIONS} ONGOING</span>
-            </p>
+        ) : (
+          <div className="bg-bg-overlay border border-border-strong rounded-md px-3 py-2.5 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+              </span>
+              <span className="text-[11px] font-mono font-bold text-white tracking-widest uppercase">SYSTEM ONLINE</span>
+            </div>
+            <div className="space-y-1">
+              <p className="font-mono text-[10px] text-text-muted tracking-wider">
+                UPTIME: <span className="text-white">{uptime}</span>
+              </p>
+              <p className="font-mono text-[10px] text-text-muted tracking-wider">
+                FL ROUND: <span className="text-white">{CURRENT_ROUND} ACTIVE</span>
+              </p>
+              <p className="font-mono text-[10px] text-text-muted tracking-wider">
+                INCIDENTS: <span className="text-white">{ACTIVE_MISSIONS} ONGOING</span>
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Current user */}
-        <div className="flex items-center gap-3">
+        <div className={`flex ${collapsed ? 'justify-center' : 'items-center gap-3'}`}>
           <div className="w-10 h-10 rounded-full bg-bg-overlay border border-border-strong flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0 relative overflow-hidden">
-            {user?.photoURL ? (
-              <Image src={user.photoURL} alt={displayName} fill className="object-cover grayscale" referrerPolicy="no-referrer" sizes="40px" />
+            {signedInUser?.photoURL ? (
+              <Image src={signedInUser.photoURL} alt={displayName} fill className="object-cover grayscale" referrerPolicy="no-referrer" sizes="40px" />
             ) : (
               initials
             )}
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-sm text-white font-medium truncate">{displayName}</span>
-            <span className="text-[11px] text-text-muted font-mono">ID: {userId}</span>
-          </div>
+          {!collapsed && (
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm text-white font-medium truncate">{displayName}</span>
+              <span className="text-[11px] text-text-muted font-mono">ID: {userId}</span>
+            </div>
+          )}
         </div>
       </div>
     </aside>

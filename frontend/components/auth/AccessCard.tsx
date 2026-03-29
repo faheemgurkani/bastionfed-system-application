@@ -10,8 +10,8 @@ export function AccessCard() {
   const { signInWithGoogle, continueAsGuest } = useAuth();
   const [googleBusy, setGoogleBusy] = useState(false);
 
-  const handleGuestAccess = () => {
-    continueAsGuest();
+  const handleGuestAccess = async () => {
+    await continueAsGuest();
     router.push("/dashboard");
   };
 
@@ -67,7 +67,7 @@ export function AccessCard() {
               </span>
             </div>
             <button
-              onClick={handleGuestAccess}
+              onClick={() => void handleGuestAccess()}
               type="button"
               className="flex w-full items-center justify-center gap-2 rounded-md bg-white px-5 py-3.5 text-base font-medium text-black transition-colors hover:bg-interactive-hover"
             >

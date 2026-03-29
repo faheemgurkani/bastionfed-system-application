@@ -1,40 +1,34 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { User } from 'firebase/auth';
 import { MessageBubble } from './MessageBubble';
 import { ChatInput } from './ChatInput';
-import { Bot, User, ShieldAlert, FileText, Search, Settings } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
+import { ConversationSidebar } from './ConversationSidebar';
+import { ApiError, apiFetchJson, isAbortError } from '@/lib/api';
+import type { BastionBotChatResponse, BotConversationHistoryResponse, BotMessage, ConversationSummary } from '@/lib/types';
+import { Bot, Loader2, Sparkles } from 'lucide-react';
+import { useAuth } from '@/contexts/auth-context';
 
 export function ChatInterface() {
-  const [messages, setMessages] = useState([
-    {
-      id: '1',
-      role: 'assistant',
-      content: 'Hello, Analyst. I am BastionBot, your SOC copilot. I have analyzed the latest FL aggregation round and identified 3 potential anomalies. How can I assist you today?',
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      role: 'user',
-      content: 'Show me the details for the anomaly on the MRI scanner in Radiology Wing B.',
-      timestamp: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      role: 'assistant',
-      content: 'Certainly. The MRI scanner (IP: 10.4.2.15) exhibited a 42% deviation in its local model updates during Round 47. Specifically, the gradients associated with network communication patterns spiked abnormally. This signature is consistent with a potential data exfiltration attempt or a compromised node trying to poison the global model. I recommend immediate isolation.',
-      timestamp: new Date().toISOString(),
-      action: {
-        type: 'QUARANTINE',
-        target: '10.4.2.15',
-        label: 'Isolate Device'
-      }
-    }
-  ]);
+  const { user, isGuest } = useAuth();
+  const signedInUser = !isGuest ? user : null;
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<BotMessage[]>([]);
+  const [sidebarLoading, setSidebarLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const quickActions = [
+    'Explain the Alerts workflow.',
+    'How do I verify the audit chain?',
+    'Summarize the current incident workflow.',
+    'How does FL Health work in BastionFed?',
+  ];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -44,108 +38,237 @@ export function ChatInterface() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = useCallback(async (content: string) => {
-    const newMessage = {
-      id: Date.now().toString(),
-      role: 'user',
+  function storageKey(uid: string): string {
+    return `bastionbot:active:${uid}`;
+  }
+
+  async function getBastionBotHeaders(currentUser: User): Promise<Record<string, string>> {
+    const token = await currentUser.getIdToken();
+    return {
+      Authorization: `Bearer ${token}`,
+      'X-BastionFed-UID': currentUser.uid,
+    };
+  }
+
+  async function loadConversation(conversationId: string, presetHeaders?: Record<string, string>, signal?: AbortSignal) {
+    if (!signedInUser) return;
+    const currentUser: User = signedInUser;
+    setHistoryLoading(true);
+    try {
+      const headers = presetHeaders ?? await getBastionBotHeaders(currentUser);
+      const requestInit = signal ? { headers, signal } : { headers };
+      const data = await apiFetchJson<BotConversationHistoryResponse>(
+        `/api/bastionbot/conversations/${conversationId}`,
+        requestInit,
+      );
+      setMessages(data.messages);
+    } catch (error) {
+      if (isAbortError(error)) return;
+      setError(error instanceof ApiError ? error.message : 'Failed to load this conversation.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!signedInUser) return;
+    const currentUser: User = signedInUser;
+
+    let cancelled = false;
+    const ac = new AbortController();
+
+    async function bootstrap() {
+      setSidebarLoading(true);
+      setError(null);
+      try {
+        const headers = await getBastionBotHeaders(currentUser);
+        const data = await apiFetchJson<{ conversations: ConversationSummary[] }>('/api/bastionbot/conversations', {
+          headers,
+          signal: ac.signal,
+        });
+        if (cancelled) return;
+
+        setConversations(data.conversations);
+        const storedId = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey(currentUser.uid)) : null;
+        const nextId = storedId && data.conversations.some((conversation) => conversation.id === storedId)
+          ? storedId
+          : (data.conversations[0]?.id ?? null);
+
+        setActiveConversationId(nextId);
+        if (nextId) {
+          await loadConversation(nextId, headers, ac.signal);
+        } else {
+          setMessages([]);
+        }
+      } catch (error) {
+        if (isAbortError(error)) return;
+        if (!cancelled) setError(error instanceof ApiError ? error.message : 'Failed to load BastionBot.');
+      } finally {
+        if (!cancelled) setSidebarLoading(false);
+      }
+    }
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [signedInUser]);
+
+  function persistActiveConversation(conversationId: string | null) {
+    if (!signedInUser || typeof window === 'undefined') return;
+    if (conversationId) {
+      window.localStorage.setItem(storageKey(signedInUser.uid), conversationId);
+    } else {
+      window.localStorage.removeItem(storageKey(signedInUser.uid));
+    }
+  }
+
+  function upsertConversation(conversation: ConversationSummary) {
+    setConversations((prev) => {
+      const next = [conversation, ...prev.filter((item) => item.id !== conversation.id)];
+      next.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return next;
+    });
+  }
+
+  async function handleSendMessage(content: string) {
+    if (!signedInUser || isLoading) return;
+
+    const optimisticMessage: BotMessage = {
+      id: `local-${Date.now()}`,
+      role: 'USER',
       content,
       timestamp: new Date().toISOString(),
+      sources: [],
     };
-    
-    setMessages(prev => [...prev, newMessage]);
+
+    setMessages((prev) => [...prev, optimisticMessage]);
+    setError(null);
     setIsLoading(true);
-    
+
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY as string });
-      const chat = ai.chats.create({
-        model: "gemini-3.1-pro-preview",
-        config: {
-          systemInstruction: "You are BastionBot, a Blue Team cybersecurity SOC copilot for an IoMT hospital environment. Provide concise, technical, and actionable responses. Use markdown for formatting.",
-        },
+      if (!signedInUser) return;
+      const currentUser: User = signedInUser;
+      const headers = await getBastionBotHeaders(currentUser);
+      const payload: Record<string, unknown> = { message: content };
+      if (activeConversationId) payload.conversationId = activeConversationId;
+
+      const response = await apiFetchJson<BastionBotChatResponse>('/api/bastionbot/chat', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
       });
 
-      // Replay history
-      for (const msg of messages) {
-        if (msg.role === 'user') {
-          await chat.sendMessage({ message: msg.content });
-        } else {
-          // We can't easily inject assistant messages into the chat history with this SDK version,
-          // so we'll just send the latest message for now, or we could build a prompt string.
-          // For simplicity, we'll just send the new message.
-        }
-      }
-
-      const response = await chat.sendMessage({ message: content });
-      
-      const botResponse = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.text || 'I could not process that request.',
-        timestamp: new Date().toISOString(),
-      };
-      setMessages(prev => [...prev, botResponse]);
+      upsertConversation(response.conversation);
+      setActiveConversationId(response.conversationId);
+      persistActiveConversation(response.conversationId);
+      await loadConversation(response.conversationId, headers);
     } catch (error) {
-      console.error('Error calling Gemini API:', error);
-      const errorResponse = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Error connecting to BastionBot AI service. Please check your API key and network connection.',
-        timestamp: new Date().toISOString(),
-      };
-      setMessages(prev => [...prev, errorResponse]);
+      setMessages((prev) => prev.filter((message) => message.id !== optimisticMessage.id));
+      setError(error instanceof ApiError ? error.message : 'Failed to send your BastionBot question.');
     } finally {
       setIsLoading(false);
     }
-  }, [messages]);
+  }
 
-  const quickActions = [
-    { icon: <ShieldAlert className="w-4 h-4" />, label: 'Analyze latest alerts' },
-    { icon: <FileText className="w-4 h-4" />, label: 'Generate shift report' },
-    { icon: <Search className="w-4 h-4" />, label: 'Search IoCs' },
-    { icon: <Settings className="w-4 h-4" />, label: 'Check FL health' },
-  ];
+  async function handleSelectConversation(conversationId: string) {
+    setActiveConversationId(conversationId);
+    persistActiveConversation(conversationId);
+    await loadConversation(conversationId);
+  }
+
+  function handleNewConversation() {
+    setActiveConversationId(null);
+    setMessages([]);
+    setError(null);
+    persistActiveConversation(null);
+  }
+
+  const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) ?? null;
 
   return (
-    <div className="flex flex-col h-full bg-bg-surface border border-border-default rounded-lg overflow-hidden">
-      <div className="p-4 border-b border-border-default bg-bg-base flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black">
-            <Bot className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-sm font-medium text-white">BastionBot</h2>
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-severity-low"></span>
-              <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">Online & Ready</span>
+    <div className="flex h-full min-h-0 flex-col lg:flex-row bg-bg-surface border border-border-default rounded-lg overflow-hidden">
+      <ConversationSidebar
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        loading={sidebarLoading}
+        collapsed={sidebarCollapsed}
+        onNewConversation={handleNewConversation}
+        onSelectConversation={handleSelectConversation}
+        onToggleCollapsed={() => setSidebarCollapsed((value) => !value)}
+      />
+
+      <div className="flex min-w-0 flex-1 flex-col min-h-[620px]">
+        <div className="flex items-center justify-between gap-3 border-b border-border-default bg-bg-base p-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black">
+              <Bot className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-sm font-medium text-white">
+                {activeConversation?.title ?? 'New BastionBot conversation'}
+              </h2>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-text-muted" />
+                <span className="text-[10px] font-mono text-text-muted uppercase tracking-wider">
+                  Ask mode · grounded, read-only
+                </span>
+              </div>
             </div>
           </div>
+
+          <div className="shrink-0 text-[10px] font-mono uppercase tracking-wider text-text-muted">
+            {activeConversation ? `${activeConversation.messageCount} messages` : 'Ready for your first question'}
+          </div>
         </div>
-        <button className="text-text-muted hover:text-white transition-colors p-2">
-          <Settings className="w-4 h-4" />
-        </button>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 no-scrollbar">
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-      
-      <div className="p-4 border-t border-border-default bg-bg-base flex flex-col gap-4">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-          {quickActions.map((action, i) => (
-            <button 
-              key={i}
-              onClick={() => handleSendMessage(action.label)}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-1.5 border border-border-default rounded-full text-xs text-text-secondary hover:text-white hover:border-white transition-colors whitespace-nowrap bg-bg-surface disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {action.icon} {action.label}
-            </button>
-          ))}
+
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 space-y-5 no-scrollbar">
+          {error && (
+            <div className="rounded-md border border-severity-high/50 bg-bg-base px-4 py-3 text-sm text-severity-high">
+              {error}
+            </div>
+          )}
+
+          {!historyLoading && messages.length === 0 && (
+            <div className="h-full flex flex-col items-center justify-center text-center px-6">
+              <div className="w-12 h-12 rounded-full bg-bg-overlay border border-border-default flex items-center justify-center mb-4">
+                <Bot className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-lg font-medium text-white">Ask BastionBot about BastionFed</h3>
+              <p className="mt-2 max-w-xl text-sm text-text-secondary">
+                BastionBot can explain screens, analyst workflows, backend endpoints, and live platform state. It is grounded in the current BastionFed docs, code map, and runtime data.
+              </p>
+            </div>
+          )}
+
+          {historyLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-text-muted" />
+            </div>
+          ) : (
+            messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
+            ))
+          )}
+          <div ref={messagesEndRef} className="h-1" />
         </div>
-        <ChatInput onSend={handleSendMessage} isLoading={isLoading} />
+
+        <div className="p-4 border-t border-border-default bg-bg-base flex flex-col gap-4">
+          <div className="flex flex-wrap gap-2">
+            {quickActions.map((action) => (
+              <button
+                key={action}
+                onClick={() => void handleSendMessage(action)}
+                disabled={isLoading}
+                className="flex max-w-full items-center gap-2 rounded-full border border-border-default bg-bg-surface px-3 py-1.5 text-left text-xs text-text-secondary transition-colors hover:border-white hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="truncate">{action}</span>
+              </button>
+            ))}
+          </div>
+          <ChatInput onSend={(message) => void handleSendMessage(message)} isLoading={isLoading} />
+        </div>
       </div>
     </div>
   );

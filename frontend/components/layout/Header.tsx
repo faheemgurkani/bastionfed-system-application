@@ -12,10 +12,11 @@ const SEVERITY_COLOR: Record<string, string> = {
   HIGH: 'text-orange-400',
 };
 
-export function Header() {
+export function Header({ sidebarCollapsed = false }: { sidebarCollapsed?: boolean }) {
   const activeRoute = useActiveRoute();
   const router = useRouter();
   const { user, loading, isGuest, signOutUser } = useAuth();
+  const signedInUser = !isGuest ? user : null;
   const alerts = useAlerts();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -50,7 +51,11 @@ export function Header() {
   }, []);
 
   return (
-    <header className="h-16 bg-bg-base border-b border-border-default flex items-center justify-between px-6 ml-[240px] fixed top-0 right-0 left-0 z-40">
+    <header
+      className={`h-16 bg-bg-base border-b border-border-default flex items-center justify-between px-6 fixed top-0 right-0 left-0 z-40 transition-[margin] duration-200 ${
+        sidebarCollapsed ? 'ml-[88px]' : 'ml-[240px]'
+      }`}
+    >
       <div className="flex items-center">
         <h1 className="font-display text-24px text-white uppercase tracking-tight">{getPageTitle()}</h1>
       </div>
@@ -151,14 +156,14 @@ export function Header() {
         <div className="w-px h-6 bg-border-default" />
 
         <div className="border border-border-strong bg-bg-overlay text-xs font-mono uppercase tracking-wider px-3 py-1 rounded-full text-white">
-          {user ? '3 INCIDENTS' : 'GUEST'}
+          {signedInUser ? '3 INCIDENTS' : 'GUEST'}
         </div>
 
         <div className="w-px h-6 bg-border-default" />
 
         {loading ? (
           <div className="w-20 h-8 bg-bg-surface rounded animate-pulse" aria-hidden />
-        ) : user ? (
+        ) : signedInUser ? (
           <div className="flex items-center gap-2">
             <button onClick={signOutUser} className="p-1.5 text-text-muted hover:text-white transition-colors" title="Sign out">
               <LogOut className="w-4 h-4" />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { IncidentKanban } from '@/components/incidents/IncidentKanban';
 import { IncidentDetail } from '@/components/incidents/IncidentDetail';
@@ -17,6 +18,7 @@ type IncidentListResponse = {
 
 export default function IncidentsPage() {
   const { user, loading: authLoading, isGuest } = useAuth();
+  const searchParams = useSearchParams();
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [incidentsLoading, setIncidentsLoading] = useState(false);
@@ -53,6 +55,10 @@ export default function IncidentsPage() {
         setIncidents(data.items);
         setSelectedIncident((prev) => {
           if (prev && data.items.some((inc) => inc.id === prev.id)) return prev;
+          const focusedIncidentId = searchParams.get('incidentId');
+          if (focusedIncidentId) {
+            return data.items.find((incident) => incident.id === focusedIncidentId) ?? null;
+          }
           return null;
         });
       } catch (e) {
@@ -68,7 +74,7 @@ export default function IncidentsPage() {
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isGuest, searchParams, user]);
 
   return (
     <AuthGate>

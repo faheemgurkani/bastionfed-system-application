@@ -44,14 +44,23 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## 4. Run the unified FastAPI backend (single port)
 
-This repo originally had 3 backend “forks”. The frontend is now integrated against a single unified backend implementation (based on `backend/hunain_implementation`).
+This repo originally had 3 backend “forks”. The unified backend now runs directly from the top-level `backend/` directory.
 
 ```bash
-cd backend/hunain_implementation
+cd backend
 python -m venv .venv
-source .venv/bin/activate  
+source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+.venv/bin/python dev_server.py
+```
+
+This is the recommended development command. It uses a scoped reload watcher so `.venv` does not trigger repeated reloads.
+
+If you want to use raw Uvicorn with reload, run:
+
+```bash
+cd backend
+uvicorn app.main:app --reload --reload-dir app --reload-dir tests --host 0.0.0.0 --port 8000
 ```
 
 The API serves at `http://localhost:8000`. Ensure `frontend/.env.local` contains:
@@ -59,6 +68,25 @@ The API serves at `http://localhost:8000`. Ensure `frontend/.env.local` contains
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
+
+Optional BastionBot persistence override:
+
+```env
+BASTIONBOT_DB_PATH=data/bastionbot.sqlite3
+```
+
+Optional BastionBot Groq configuration is loaded from `backend/.env`:
+
+```env
+GROQ_API_KEY=
+GROQ_MODEL=llama-3.1-8b-instant
+```
+
+The contributor-specific backends still remain intact and runnable independently:
+
+- `backend/faheem_implementation/`
+- `backend/hunain_implementation/`
+- `backend/hammad_implementation/`
 
 ---
 
@@ -73,8 +101,9 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
-NEXT_PUBLIC_GEMINI_API_KEY=
 ```
+
+The BastionBot page no longer requires a browser-side Gemini key. It now uses the unified FastAPI backend and per-user SQLite-backed memory.
 
 A `frontend/.env.example` with these keys (empty values) is already in the repo for reference.
 

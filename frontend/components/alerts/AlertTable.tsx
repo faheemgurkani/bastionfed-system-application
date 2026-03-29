@@ -1,17 +1,27 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { Alert } from "@/lib/types";
 import { MoreHorizontal, ChevronDown, ChevronRight } from "lucide-react";
 import { AlertDetailDrawer } from "./AlertDetailDrawer";
 
 interface AlertTableProps {
   alerts: Alert[];
+  focusedAlertId?: string | null;
 }
 
-export function AlertTable({ alerts }: AlertTableProps) {
+export function AlertTable({ alerts, focusedAlertId = null }: AlertTableProps) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+
+  useEffect(() => {
+    if (!focusedAlertId) return;
+    const focusedAlert = alerts.find((alert) => alert.id === focusedAlertId) ?? null;
+    if (focusedAlert) {
+      setSelectedAlert(focusedAlert);
+      setExpandedRow(focusedAlert.id);
+    }
+  }, [alerts, focusedAlertId]);
 
   const toggleRow = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();

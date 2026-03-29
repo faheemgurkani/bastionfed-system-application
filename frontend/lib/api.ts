@@ -32,9 +32,14 @@ async function parseError(res: Response): Promise<{ detail?: string; code?: stri
   try {
     const j = (await res.json()) as { detail?: string | { detail?: string; code?: string }; code?: string };
     if (typeof j.detail === 'object' && j.detail !== null && 'detail' in j.detail) {
-      return { detail: String((j.detail as { detail?: string }).detail), code: (j.detail as { code?: string }).code };
+      const code = (j.detail as { code?: string }).code;
+      return code
+        ? { detail: String((j.detail as { detail?: string }).detail), code }
+        : { detail: String((j.detail as { detail?: string }).detail) };
     }
-    if (typeof j.detail === 'string') return { detail: j.detail, code: j.code };
+    if (typeof j.detail === 'string') {
+      return j.code ? { detail: j.detail, code: j.code } : { detail: j.detail };
+    }
   } catch {
     /* ignore */
   }

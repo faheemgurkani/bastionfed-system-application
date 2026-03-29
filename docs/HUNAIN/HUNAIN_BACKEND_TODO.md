@@ -15,13 +15,14 @@ References:
 - Stub bearer auth (token presence), guest mode for read routes.
 - SSE route for FL patches implemented in FastAPI (`/api/fl-events`).
 - JSON contracts use camelCase aliases.
+- BastionBot Ask Mode is now implemented in the unified backend with signed-in-only access, `X-BastionFed-UID` scoping, SQLite persistence, deterministic retrieval, and source citations.
 
 ---
 
 ## Pending validation (manual/UI)
 
 - [ ] Verify `/api/fl-events` in browser EventSource flow (token mode and reconnect behavior).
-- [ ] Verify chat UX path (`/api/bastionbot/chat`) from frontend context actions.
+- [ ] Verify BastionBot chat UX path (`/api/bastionbot/chat`) end to end with Google sign-in and per-user persistence.
 - [ ] Verify escalate action from alert drawer end-to-end in UI.
 - [ ] Verify playbook run button behavior in incident detail UI.
 - [ ] Verify model activate action from FL model UI.
@@ -31,6 +32,7 @@ References:
 ## Gaps vs PRD (known)
 
 - [ ] Firebase Admin SDK verification not integrated (currently stub bearer check).
+- [ ] BastionBot identity still relies on frontend-provided `X-BastionFed-UID` until Firebase Admin verification is added.
 - [ ] `POST /api/alerts/{alert_id}/escalate` currently returns 200; PRD example indicates 201.
 - [ ] `GET /api/incidents` router currently exposes limit/cursor; PRD also describes extra filters.
 - [ ] `GET /api/fl/rounds` PRD mentions query options that are not yet surfaced in router signature.
@@ -41,5 +43,5 @@ References:
 ## Suggested next steps
 
 1. Lock contract deltas (status codes + query params) with team.
-2. Add Firebase Admin verification in auth dependency layer.
-3. Keep existing test suite green while applying strict PRD-alignment fixes.
+2. Add Firebase Admin verification in auth dependency layer so BastionBot no longer relies on asserted UID headers.
+3. Keep the unified test suite green while applying strict PRD-alignment fixes.

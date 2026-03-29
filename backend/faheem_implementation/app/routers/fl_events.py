@@ -12,7 +12,7 @@ from app.store.memory import state
 
 router = APIRouter(tags=["fl"])
 
-_SSE_TICK_S = 0.35
+_SSE_TICK_S = 0.25
 _KEEPALIVE_EVERY_S = 15.0
 
 

@@ -5,6 +5,7 @@ import { AlertTable } from "@/components/alerts/AlertTable";
 import { AlertFilters } from "@/components/alerts/AlertFilters";
 import { useAlertsContext } from "@/contexts/alerts-context";
 import { useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import type { Alert } from "@/lib/types";
 
 const SEVERITY_ORDER: Record<string, number> = {
@@ -65,6 +66,7 @@ function filterAndSortAlerts(
 
 export default function AlertsPage() {
   const { alerts, alertsLoading, alertsError } = useAlertsContext();
+  const searchParams = useSearchParams();
   const [activeSeverity, setActiveSeverity] = useState<string>("ALL");
   const [activeTactic, setActiveTactic] = useState<string>("All Tactics");
   const [activeDateRange, setActiveDateRange] = useState<string>("All Time");
@@ -75,6 +77,7 @@ export default function AlertsPage() {
       filterAndSortAlerts(alerts, activeSeverity, activeTactic, activeDateRange, sortBy),
     [alerts, activeSeverity, activeTactic, activeDateRange, sortBy]
   );
+  const focusedAlertId = searchParams.get("alertId");
 
   return (
     <AuthGate>
@@ -98,7 +101,7 @@ export default function AlertsPage() {
           onChangeSort={setSortBy}
         />
         <div className="flex-1 bg-bg-surface border border-border-default rounded-lg overflow-hidden flex flex-col">
-          <AlertTable alerts={filteredAlerts} />
+          <AlertTable alerts={filteredAlerts} focusedAlertId={focusedAlertId} />
         </div>
       </div>
     </AuthGate>
