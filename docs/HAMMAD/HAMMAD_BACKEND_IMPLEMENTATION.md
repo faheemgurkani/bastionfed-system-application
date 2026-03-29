@@ -4,6 +4,8 @@ This document describes what was implemented for **Hammad’s 12 endpoints** per
 
 **Scope (phase 1):** FastAPI service with in-memory state, seeded mock data, and stub auth.
 
+**Parity note:** Hammad's endpoint logic is now also promoted into the shared `backend/` runtime, so running the backend from the top-level `backend/` directory includes Hammad's operational routes alongside Faheem and Hunain. The standalone `backend/hammad_implementation/` service remains runnable independently.
+
 ---
 
 ## Implemented endpoints (Hammad)
@@ -49,6 +51,9 @@ Additional non-contract route:
 - `POST /api/forensics/samples` accepts multipart upload and creates pending sample record.
 - `POST /api/forensics/rca` generates RCA from incident data and appends audit entry.
 - `POST /api/network/block-ip` returns firewall rule metadata (`ruleId`, `appliedAt`) and logs audit action.
+- `GET /api/bastionbot/conversations/{conversation_id}` is now aligned with the unified BastionBot contract:
+  - requires signed-in user auth
+  - returns `404 CONVERSATION_NOT_FOUND` for missing conversations
 
 ---
 

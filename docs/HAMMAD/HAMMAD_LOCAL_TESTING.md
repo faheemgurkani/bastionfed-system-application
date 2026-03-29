@@ -38,11 +38,12 @@ Read routes:
 
 ```bash
 curl -s "$BASE/api/devices?guest=true"
-curl -s "$BASE/api/devices/DEV-001?guest=true"
+curl -s "$BASE/api/devices/dev-01?guest=true"
 curl -s "$BASE/api/fl/drift?guest=true"
 curl -s "$BASE/api/fl/models?guest=true"
 curl -s "$BASE/api/forensics/rca?guest=true"
-curl -s "$BASE/api/bastionbot/conversations/conv-1?guest=true"
+curl -s "$BASE/api/bastionbot/conversations/conv-1" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 Mutation routes:
@@ -51,9 +52,9 @@ Mutation routes:
 curl -s -X PATCH "$BASE/api/incidents/INC-001" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"status":"INVESTIGATING","assignee":"analyst@bastionfed.ai","notes":"manual update"}'
+  -d '{"status":"RESPONDING","assignee":"analyst@bastionfed.ai","notes":"manual update"}'
 
-curl -s -X PATCH "$BASE/api/incidents/INC-001/playbook/steps/PB-1" \
+curl -s -X PATCH "$BASE/api/incidents/INC-001/playbook/steps/s6" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"status":"COMPLETED","notes":"done"}'

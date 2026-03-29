@@ -12,19 +12,25 @@ from typing import Any
 from app.models.domain import (
     Alert,
     AlertStatus,
+    AffectedNode,
     BotMessage,
     ConversationSummary,
     AuditAction,
     AuditLog,
     Device,
     DeviceStatus,
+    DynamicAnalysis,
     FLClient,
     FLClientStatus,
     FLRound,
     Incident,
     IncidentEvent,
+    IncidentStatus,
     MalwareSample,
     RCAReport,
+    SampleAnalysis,
+    StaticAnalysis,
+    TimelineNode,
     UserRecord,
 )
 from app.store import seed_data
@@ -221,6 +227,22 @@ class AppState:
                 return d.model_copy(deep=True)
         return None
 
+    def list_devices(
+        self,
+        *,
+        wing: str | None = None,
+        status: str | None = None,
+        type: str | None = None,
+    ) -> list[Device]:
+        rows = self.devices
+        if wing:
+            rows = [d for d in rows if d.wing == wing]
+        if status:
+            rows = [d for d in rows if _enum_primitive(d.status) == status]
+        if type:
+            rows = [d for d in rows if d.type == type]
+        return [d.model_copy(deep=True) for d in rows]
+
     def set_device_status(self, device_id: str, status: DeviceStatus) -> Device | None:
         for i, d in enumerate(self.devices):
             if d.id == device_id:
@@ -293,6 +315,65 @@ class AppState:
             "driftDetected": poison,
         }
 
+    def fl_drift_dict(self) -> dict[str, Any]:
+        latest_round = self.fl_rounds[-1].round if self.fl_rounds else 0
+        latest_acc = self.fl_rounds[-1].accuracy if self.fl_rounds else 0.0
+        baseline_acc = self.fl_rounds[-6].accuracy if len(self.fl_rounds) >= 6 else latest_acc
+
+        entries: list[dict[str, Any]] = []
+        for c in self.fl_clients:
+            rounds_ago = max(0, latest_round - c.last_round)
+            flagged = _enum_primitive(c.status) in ("POISONING_SUSPECT", "DEGRADED")
+            drift = round(max(0.01, (baseline_acc - latest_acc) / max(1.0, 100.0) + (0.06 if flagged else 0.02)), 2)
+            entries.append(
+                {
+                    "clientId": c.id,
+                    "department": c.department,
+                    "roundsAgo": rounds_ago,
+                    "driftScore": drift,
+                    "baselineAccuracy": round(baseline_acc, 1),
+                    "currentAccuracy": round(latest_acc, 1),
+                    "flagged": flagged,
+                }
+            )
+        return {"entries": entries}
+
+    def fl_models_dict(self) -> dict[str, Any]:
+        active = self.active_model_name
+        models = [
+            {
+                "name": "v4.2.1-DNN",
+                "type": "DNN",
+                "accuracy": 94.2,
+                "fpRate": 0.9,
+                "size": "48MB",
+                "trainedOn": "2025-05-28T00:00:00Z",
+                "description": "Deep neural network, general-purpose IoMT threat detection.",
+                "active": active == "v4.2.1-DNN",
+            },
+            {
+                "name": "v4.1.0-GNN",
+                "type": "GNN",
+                "accuracy": 91.8,
+                "fpRate": 1.1,
+                "size": "36MB",
+                "trainedOn": "2025-05-20T00:00:00Z",
+                "description": "Graph neural network for lateral movement and topology anomalies.",
+                "active": active == "v4.1.0-GNN",
+            },
+            {
+                "name": "v4.0.5-HYB",
+                "type": "HYB",
+                "accuracy": 89.5,
+                "fpRate": 1.4,
+                "size": "60MB",
+                "trainedOn": "2025-05-10T00:00:00Z",
+                "description": "Legacy ensemble hybrid model. Kept for fallback and baseline comparison.",
+                "active": active == "v4.0.5-HYB",
+            },
+        ]
+        return {"models": models}
+
     # --- Forensics ---
 
     def list_samples(
@@ -327,6 +408,235 @@ class AppState:
             if r.id == rca_id:
                 return r.model_copy(deep=True)
         return None
+
+    def list_rca_reports(self) -> tuple[list[RCAReport], int]:
+        items = [r.model_copy(deep=True) for r in self.rca_reports]
+        return items, len(items)
+
+    def upload_malware_sample(self, *, file: Any, device_id: str, notes: str | None = None) -> MalwareSample:
+        data = file.file.read() if hasattr(file, "file") else file.read()
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        sha256 = hashlib.sha256(data).hexdigest()
+        md5 = hashlib.md5(data).hexdigest()
+
+        if self.malware_samples:
+            last = sorted(self.malware_samples, key=lambda s: s.id)[-1]
+            try:
+                n = int("".join(ch for ch in last.id if ch.isdigit()))
+            except ValueError:
+                n = len(self.malware_samples)
+        else:
+            n = 0
+
+        sid = f"MAL-{n + 1:03d}"
+        family = notes or "Uploaded Sample"
+
+        sample = MalwareSample(
+            id=sid,
+            sha256=sha256,
+            md5=md5,
+            filename=getattr(file, "filename", "upload.bin"),
+            size=f"{len(data)} bytes",
+            type="UPLOADED",
+            device_id=device_id,
+            timestamp=now,
+            upload_time=now,
+            family=family,
+            threat_score=0,
+            status="PENDING",
+            analysis=SampleAnalysis(
+                static=StaticAnalysis(imports=[], strings=[]),
+                dynamic=DynamicAnalysis(network=[], file_system=[], processes=[]),
+            ),
+        )
+        self.malware_samples.append(sample)
+        return sample
+
+    def generate_rca_report(self, *, incident_id: str) -> RCAReport | None:
+        inc = self.get_incident(incident_id)
+        if not inc:
+            return None
+
+        if self.rca_reports:
+            last = sorted(self.rca_reports, key=lambda r: r.id)[-1]
+            try:
+                n = int("".join(ch for ch in last.id if ch.isdigit()))
+            except ValueError:
+                n = len(self.rca_reports)
+        else:
+            n = 0
+
+        rid = f"RCA-{n + 1:03d}"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        timeline_nodes = [TimelineNode(label=ev.type, timestamp=ev.timestamp) for ev in inc.timeline]
+        affected_nodes = [
+            AffectedNode(
+                device_name=d.name,
+                ip=d.ip,
+                impact=f"{_enum_primitive(d.status)}",
+            )
+            for d in inc.affected_devices
+        ]
+
+        report = RCAReport(
+            id=rid,
+            incident_id=inc.id,
+            title=f"Auto RCA — {inc.title}",
+            executive_summary=f"Generated RCA for incident {inc.id}.",
+            timeline_nodes=timeline_nodes,
+            affected_nodes=affected_nodes,
+            mitre_chain=["Initial Access", "Execution", "Impact"],
+            response_actions=["Automated analysis run", "Report assembled from incident timeline"],
+            recommendations=["Review affected devices", "Update detection rules and runbook"],
+        )
+        self.rca_reports.append(report)
+        self.append_audit(
+            actor="BastionFed System",
+            action=AuditAction.REPORT_GENERATED,
+            target=incident_id,
+            result=f"Generated {rid} at {now}",
+        )
+        return report.model_copy(deep=True)
+
+    def patch_incident_status(
+        self,
+        *,
+        incident_id: str,
+        status: IncidentStatus,
+        assignee: str,
+        notes: str | None,
+        actor: str,
+    ) -> Incident | None:
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        for i, inc in enumerate(self.incidents):
+            if inc.id != incident_id:
+                continue
+
+            new_inc = inc.model_copy(deep=True)
+            new_inc = new_inc.model_copy(update={"status": status, "assignee": assignee})
+
+            event_type: str = "RESOLVED" if status == IncidentStatus.RESOLVED else "ANALYST_ASSIGNED"
+            desc = notes or f"Incident status updated to {status.value}"
+            ev = IncidentEvent(
+                id=f"ev-{int(time.time() * 1000)}-{i}",
+                timestamp=now,
+                type=event_type,
+                description=desc,
+            )
+            new_inc.timeline = list(new_inc.timeline) + [ev]
+            self.incidents[i] = new_inc
+
+            self.append_audit(
+                actor=actor,
+                action=AuditAction.RESPONSE_TRIGGERED,
+                target=incident_id,
+                result=f"{status.value}: {desc}",
+            )
+            return new_inc.model_copy(deep=True)
+        return None
+
+    def patch_playbook_step(
+        self,
+        *,
+        incident_id: str,
+        step_id: str,
+        status: str,
+        notes: str | None,
+        actor: str,
+    ) -> Any | None:
+        if status not in ("COMPLETED", "RUNNING", "PENDING"):
+            return None
+
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        for i, inc in enumerate(self.incidents):
+            if inc.id != incident_id:
+                continue
+
+            steps = list(inc.playbook.steps)
+            for j, step in enumerate(steps):
+                if step.id != step_id:
+                    continue
+
+                updated_step = step.model_copy(
+                    update={
+                        "status": status,
+                        "timestamp": now,
+                        "notes": notes,
+                    }
+                )
+                steps[j] = updated_step
+                new_playbook = inc.playbook.model_copy(update={"steps": steps})
+                new_inc = inc.model_copy(deep=True).model_copy(update={"playbook": new_playbook})
+
+                if steps and all(s.status == "COMPLETED" for s in steps):
+                    new_inc = new_inc.model_copy(update={"status": IncidentStatus.RESOLVED})
+                    ev = IncidentEvent(
+                        id=f"ev-{int(time.time() * 1000)}-{i}-pb",
+                        timestamp=now,
+                        type="RESOLVED",
+                        description="All playbook steps completed",
+                    )
+                    new_inc.timeline = list(new_inc.timeline) + [ev]
+
+                self.incidents[i] = new_inc
+                self.append_audit(
+                    actor=actor,
+                    action=AuditAction.RESPONSE_TRIGGERED,
+                    target=incident_id,
+                    result=f"Playbook step {step_id} -> {status}",
+                )
+                return updated_step.model_copy(deep=True)
+
+        return None
+
+    def halt_playbook(self, *, incident_id: str, reason: str, actor: str) -> dict[str, Any] | None:
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        for i, inc in enumerate(self.incidents):
+            if inc.id != incident_id:
+                continue
+
+            running = next((s for s in inc.playbook.steps if s.status == "RUNNING"), None)
+            if not running:
+                return {"halted": True, "haltedAt": now, "stoppedAt": None}
+
+            steps = [
+                s.model_copy(
+                    update={
+                        "status": "PENDING",
+                        "timestamp": now,
+                        "notes": reason,
+                    }
+                )
+                if s.id == running.id
+                else s
+                for s in inc.playbook.steps
+            ]
+            new_playbook = inc.playbook.model_copy(update={"steps": steps})
+            new_inc = inc.model_copy(deep=True).model_copy(update={"playbook": new_playbook})
+            self.incidents[i] = new_inc
+
+            self.append_audit(
+                actor=actor,
+                action=AuditAction.RESPONSE_TRIGGERED,
+                target=incident_id,
+                result=f"Playbook halted: {reason}",
+            )
+            return {"halted": True, "haltedAt": now, "stoppedAt": running.id}
+
+        return None
+
+    def block_ip(self, *, ip: str, reason: str, alert_id: str | None = None) -> dict[str, Any] | None:
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        rule_id = f"FW-RULE-{random.randint(1000, 9999)}"
+        target = alert_id or ip
+        self.append_audit(
+            actor="BastionFed System",
+            action=AuditAction.RESPONSE_TRIGGERED,
+            target=target,
+            result=f"Blocked IP {ip}: {reason}",
+        )
+        return {"ip": ip, "ruleId": rule_id, "appliedAt": now}
 
     # --- Audit ---
 

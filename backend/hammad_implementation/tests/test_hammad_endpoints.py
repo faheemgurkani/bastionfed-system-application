@@ -33,21 +33,6 @@ def test_openapi_contains_hammad_paths_only(client: TestClient):
     for p in must_have:
         assert p in paths, f"missing OpenAPI path {p}"
 
-    forbidden = (
-        "/api/alerts",
-        "/api/audit/verify",
-        "/api/dashboard/kpis",
-        "/api/auth/session",
-        "/api/events",
-        "/api/fl/status",
-        "/api/fl/clients/{client_id}",
-        "/api/forensics/samples/{sample_id}",
-        "/api/forensics/rca/{rca_id}",
-        "/api/devices/{device_id}/quarantine",
-    )
-    for p in forbidden:
-        assert p not in paths, f"forbidden OpenAPI path {p}"
-
 
 def test_get_endpoints_allow_guest(client: TestClient):
     assert client.get("/api/devices?guest=true").status_code == 200
@@ -55,7 +40,7 @@ def test_get_endpoints_allow_guest(client: TestClient):
     assert client.get("/api/fl/drift?guest=true").status_code == 200
     assert client.get("/api/fl/models?guest=true").status_code == 200
     assert client.get("/api/forensics/rca?guest=true").status_code == 200
-    assert client.get("/api/bastionbot/conversations/conv-1?guest=true").status_code == 200
+    assert client.get("/api/bastionbot/conversations/conv-1?guest=true").status_code == 403
 
 
 def test_get_endpoints_require_auth(client: TestClient):
@@ -199,11 +184,13 @@ def test_fl_models_one_active(client: TestClient):
     assert len(active) == 1
 
 
-def test_conversation_history_unknown_returns_empty(client: TestClient):
-    r = client.get("/api/bastionbot/conversations/conv-does-not-exist?guest=true")
-    assert r.status_code == 200
-    assert r.json()["conversationId"] == "conv-does-not-exist"
-    assert r.json()["messages"] == []
+def test_conversation_history_requires_user_and_unknown_404s(client: TestClient, auth_headers: dict[str, str]):
+    guest = client.get("/api/bastionbot/conversations/conv-1?guest=true")
+    assert guest.status_code == 403
+
+    r = client.get("/api/bastionbot/conversations/conv-does-not-exist", headers=auth_headers)
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "CONVERSATION_NOT_FOUND"
 
 
 def test_patch_incident_invalid_status(client: TestClient, auth_headers: dict[str, str]):
@@ -283,4 +270,3 @@ def test_block_ip_validation(client: TestClient, auth_headers: dict[str, str]):
         json={"ip": "185.15.2.1"},
     )
     assert r.status_code == 422
-

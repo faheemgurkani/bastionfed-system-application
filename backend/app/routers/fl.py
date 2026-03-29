@@ -38,6 +38,16 @@ def list_fl_clients(_auth: Annotated[AuthContext, Depends(require_read_auth)]) -
     return FLClientsResponse(clients=state.fl_clients)
 
 
+@router.get("/fl/drift", response_model=dict)
+def drift(_auth: Annotated[AuthContext, Depends(require_read_auth)]) -> dict:
+    return state.fl_drift_dict()
+
+
+@router.get("/fl/models", response_model=dict)
+def models(_auth: Annotated[AuthContext, Depends(require_read_auth)]) -> dict:
+    return state.fl_models_dict()
+
+
 @router.post("/fl/models/{model_name}/activate", response_model=FLModelActivateResponse)
 def activate_fl_model(
     model_name: str,

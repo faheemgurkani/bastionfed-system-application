@@ -1,8 +1,8 @@
 # Unified Backend Conflict Resolution
 
-This note records the Faheem vs Hunain logic conflict that was resolved when promoting the unified backend to `backend/`.
+This note records the runtime conflicts and parity decisions that were resolved when promoting the unified backend to `backend/`.
 
-## Conflict
+## Faheem vs Hunain conflict
 
 The only confirmed Faheem/Hunain runtime conflict was in the SSE event cadence:
 
@@ -37,3 +37,47 @@ When you run the server from `backend/`, the active runtime behavior is:
 - Hunain logic for FL SSE cadence on `/api/fl-events`
 
 Everything else on the Faheem/Hunain assigned endpoint surface remains preserved in the unified backend according to the promoted router logic already present in `backend/app`.
+
+## Hammad alignment decisions
+
+Hammad's standalone implementation introduced additional endpoint logic that was not originally promoted into `backend/`. That gap has now been closed for the shared backend:
+
+- `GET /api/devices`
+- `GET /api/devices/{device_id}`
+- `GET /api/fl/drift`
+- `GET /api/fl/models`
+- `GET /api/forensics/rca`
+- `PATCH /api/incidents/{incident_id}`
+- `PATCH /api/incidents/{incident_id}/playbook/steps/{step_id}`
+- `POST /api/incidents/{incident_id}/playbook/halt`
+- `POST /api/forensics/samples`
+- `POST /api/forensics/rca`
+- `POST /api/network/block-ip`
+
+### BastionBot contract conflict
+
+One Hammad-era BastionBot route conflicted with the newer unified BastionBot implementation:
+
+- old Hammad standalone behavior:
+  - `GET /api/bastionbot/conversations/{conversation_id}` allowed `?guest=true`
+  - unknown conversation IDs returned `200` with an empty message list
+- unified backend behavior:
+  - BastionBot is signed-in only
+  - unknown conversation IDs return `404 CONVERSATION_NOT_FOUND`
+
+### Resolution used by `backend/`
+
+The top-level unified backend keeps the newer unified BastionBot contract:
+
+- BastionBot routes are signed-in only
+- `GET /api/bastionbot/conversations/{conversation_id}` returns `404` when the conversation does not exist for that user
+
+### Reflection back into `hammad_implementation`
+
+To remove drift from Hammad's standalone backend:
+
+- `backend/hammad_implementation/app/routers/auth.py`
+  - BastionBot conversation history now requires user auth
+  - unknown conversation IDs now return `CONVERSATION_NOT_FOUND`
+- `backend/hammad_implementation/tests/test_hammad_endpoints.py`
+  - updated to match the unified BastionBot contract
