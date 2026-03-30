@@ -65,9 +65,15 @@ class AppState:
         self.users: dict[str, UserRecord] = {}
         self.conversations: list[ConversationSummary] = []
         self.conversation_messages: dict[str, list[BotMessage]] = {}
-        self.active_model_name: str = "v4.2.1-DNN"
-        self.model_zoo_names: set[str] = {"v4.2.1-DNN", "v4.1.0-GNN", "v4.0.5-HYB"}
-        self.fl_session_id: str = "sess_2025_06_01"
+        self.active_model_name: str = "fl-meta-v1"
+        self.model_zoo_names: set[str] = {
+            "fl-meta-v1", "fl-resnet-v1", "fl-dnn-v1",
+            "client-1-meta", "client-1-resnet", "client-1-dnn",
+            "client-2-meta", "client-2-resnet", "client-2-dnn",
+            "client-3-meta", "client-3-resnet", "client-3-dnn",
+            "client-4-meta", "client-4-resnet", "client-4-dnn",
+        }
+        self.fl_session_id: str = "sess_fl_nodp_r10"
 
     def reset(self) -> None:
         global AUDIT_COUNTER
@@ -81,7 +87,7 @@ class AppState:
         self.rca_reports = seed_data.build_rca_reports()
         self.audit_logs = []
         self.users = {}
-        self.active_model_name = "v4.2.1-DNN"
+        self.active_model_name = "fl-meta-v1"
         self.conversations = [
             ConversationSummary(
                 id="conv-1",
@@ -125,7 +131,13 @@ class AppState:
             ),
         ]
         self.conversation_messages = {c.id: [] for c in self.conversations}
-        self.model_zoo_names = {"v4.2.1-DNN", "v4.1.0-GNN", "v4.0.5-HYB"}
+        self.model_zoo_names = {
+            "fl-meta-v1", "fl-resnet-v1", "fl-dnn-v1",
+            "client-1-meta", "client-1-resnet", "client-1-dnn",
+            "client-2-meta", "client-2-resnet", "client-2-dnn",
+            "client-3-meta", "client-3-resnet", "client-3-dnn",
+            "client-4-meta", "client-4-resnet", "client-4-dnn",
+        }
         prev = ""
         for row in seed_data.build_audit_log_payloads(now):
             h = _audit_hash(prev, row)
@@ -276,7 +288,7 @@ class AppState:
 
         rounds = self.fl_rounds
         current = rounds[-1].round if rounds else 0
-        total_rounds = 100
+        total_rounds = len(rounds)
         latest = rounds[-1] if rounds else None
         active_clients = sum(1 for c in self.fl_clients if _st(c.status) == "ACTIVE")
         total_clients = len(self.fl_clients)
@@ -291,6 +303,8 @@ class AppState:
             "latestAccuracy": round(latest.accuracy, 1) if latest else 0.0,
             "latestFpRate": round(latest.fp_rate, 1) if latest else 0.0,
             "driftDetected": poison,
+            "activeModel": self.active_model_name,
+            "modelZoo": sorted(self.model_zoo_names),
         }
 
     # --- Forensics ---

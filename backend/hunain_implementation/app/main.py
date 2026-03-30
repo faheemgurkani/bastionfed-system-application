@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.bastionbot import bastionbot_engine, bastionbot_store
 from app.config import settings
+from app.ml.data import load_dataset
+from app.ml.inference import load_models
 from app.store.memory import state
 
 
@@ -13,6 +15,8 @@ async def lifespan(_app: FastAPI):
     bastionbot_store.configure(settings.bastionbot_db_path)
     bastionbot_engine.initialize()
     state.reset()
+    load_dataset()
+    load_models()
     yield
 
 

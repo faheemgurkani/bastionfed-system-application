@@ -4,13 +4,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useActiveRoute } from '@/hooks/use-active-route';
 import { useAuth } from '@/contexts/auth-context';
-import { MOCK_FL_ROUNDS, MOCK_FL_CLIENTS, MOCK_INCIDENTS } from '@/lib/mock-data';
+import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 import { Map, Bell, Activity, Shield, Search, FileText, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
-
-const CURRENT_ROUND = MOCK_FL_ROUNDS[MOCK_FL_ROUNDS.length - 1]?.round ?? 0;
-const ACTIVE_AGENTS = MOCK_FL_CLIENTS.filter(c => c.status === 'ACTIVE').length;
-const ACTIVE_MISSIONS = MOCK_INCIDENTS.filter(i => i.status !== 'RESOLVED' && i.status !== 'POST_MORTEM').length;
 
 function useUptime() {
   const [seconds, setSeconds] = useState(0);
@@ -40,6 +36,51 @@ function getUserId(uid: string | undefined, isGuest: boolean): string {
   return uid.substring(0, 8).toUpperCase();
 }
 
+function useSidebarStats() {
+  const { user, loading: authLoading, isGuest } = useAuth();
+  const [currentRound, setCurrentRound] = useState(0);
+  const [activeMissions, setActiveMissions] = useState(0);
+
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+    const ac = new AbortController();
+
+    async function load() {
+      const opts = isGuest
+        ? { guest: true as const, signal: ac.signal }
+        : user
+        ? { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, signal: ac.signal }
+        : null;
+      if (!opts) return;
+      try {
+        const [status, incidents] = await Promise.all([
+          apiFetchJson<{ currentRound: number; activeClients: number }>('/api/fl/status', opts),
+          apiFetchJson<{ items: { status: string }[]; total: number }>('/api/incidents', opts),
+        ]);
+        if (!cancelled) {
+          setCurrentRound(status.currentRound);
+          const ongoing = incidents.items.filter(
+            (i) => i.status !== 'RESOLVED' && i.status !== 'POST_MORTEM',
+          ).length;
+          setActiveMissions(ongoing);
+        }
+      } catch (e) {
+        if (isAbortError(e)) return;
+        if (!cancelled && e instanceof ApiError) console.warn('Sidebar stats:', e.message);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [authLoading, isGuest, user]);
+
+  return { currentRound, activeMissions };
+}
+
 export function Sidebar({
   collapsed = false,
   onToggleCollapsed,
@@ -51,6 +92,7 @@ export function Sidebar({
   const { user, isGuest } = useAuth();
   const signedInUser = !isGuest ? user : null;
   const uptime = useUptime();
+  const { currentRound, activeMissions } = useSidebarStats();
 
   const displayName = isGuest ? 'Guest' : (signedInUser?.displayName ?? signedInUser?.email ?? 'Unknown');
   const initials = isGuest ? 'G' : getInitials(signedInUser?.displayName ?? signedInUser?.email);
@@ -143,10 +185,10 @@ export function Sidebar({
                 UPTIME: <span className="text-white">{uptime}</span>
               </p>
               <p className="font-mono text-[10px] text-text-muted tracking-wider">
-                FL ROUND: <span className="text-white">{CURRENT_ROUND} ACTIVE</span>
+                FL ROUND: <span className="text-white">{currentRound} ACTIVE</span>
               </p>
               <p className="font-mono text-[10px] text-text-muted tracking-wider">
-                INCIDENTS: <span className="text-white">{ACTIVE_MISSIONS} ONGOING</span>
+                INCIDENTS: <span className="text-white">{activeMissions} ONGOING</span>
               </p>
             </div>
           </div>

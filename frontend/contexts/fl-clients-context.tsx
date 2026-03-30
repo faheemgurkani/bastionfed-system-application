@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { FLClient } from '@/lib/types';
-import { MOCK_FL_CLIENTS } from '@/lib/mock-data';
 import { useAuth } from '@/contexts/auth-context';
 import { apiFetchJson, ApiError, flEventsSourceUrl, isAbortError } from '@/lib/api';
 
@@ -12,7 +11,7 @@ const FLClientsContext = createContext<FLClientsContextValue | undefined>(undefi
 
 export function FLClientsProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading, isGuest } = useAuth();
-  const [clients, setClients] = useState<FLClient[]>(MOCK_FL_CLIENTS);
+  const [clients, setClients] = useState<FLClient[]>([]);
 
   useEffect(() => {
     if (authLoading) return;

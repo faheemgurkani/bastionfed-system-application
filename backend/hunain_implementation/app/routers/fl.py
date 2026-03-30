@@ -5,11 +5,22 @@ from fastapi import APIRouter, Depends, status
 
 from app.auth.deps import AuthContext, require_read_auth, require_user
 from app.errors import api_error
+from app.ml.drift import get_drift_report, get_per_client_drift
 from app.models.api import FLClientsResponse, FLModelActivateResponse, FLRoundsResponse
 from app.models.domain import AuditAction, FLClient
 from app.store.memory import state
 
 router = APIRouter(tags=["fl"])
+
+
+@router.get("/fl/drift")
+def fl_drift(_auth: Annotated[AuthContext, Depends(require_read_auth)]) -> dict:
+    return get_drift_report()
+
+
+@router.get("/fl/drift/clients")
+def fl_client_drift(_auth: Annotated[AuthContext, Depends(require_read_auth)]) -> dict:
+    return get_per_client_drift()
 
 
 @router.get("/fl/status")
