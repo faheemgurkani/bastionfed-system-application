@@ -68,10 +68,7 @@ class AppState:
         self.active_model_name: str = "fl-meta-v1"
         self.model_zoo_names: set[str] = {
             "fl-meta-v1", "fl-resnet-v1", "fl-dnn-v1",
-            "client-1-meta", "client-1-resnet", "client-1-dnn",
-            "client-2-meta", "client-2-resnet", "client-2-dnn",
-            "client-3-meta", "client-3-resnet", "client-3-dnn",
-            "client-4-meta", "client-4-resnet", "client-4-dnn",
+            *(f"client-{i}-{t}" for i in range(1, 9) for t in ("meta", "resnet", "dnn")),
         }
         self.fl_session_id: str = "sess_fl_nodp_r10"
 
@@ -133,10 +130,7 @@ class AppState:
         self.conversation_messages = {c.id: [] for c in self.conversations}
         self.model_zoo_names = {
             "fl-meta-v1", "fl-resnet-v1", "fl-dnn-v1",
-            "client-1-meta", "client-1-resnet", "client-1-dnn",
-            "client-2-meta", "client-2-resnet", "client-2-dnn",
-            "client-3-meta", "client-3-resnet", "client-3-dnn",
-            "client-4-meta", "client-4-resnet", "client-4-dnn",
+            *(f"client-{i}-{t}" for i in range(1, 9) for t in ("meta", "resnet", "dnn")),
         }
         prev = ""
         for row in seed_data.build_audit_log_payloads(now):

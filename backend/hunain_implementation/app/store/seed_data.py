@@ -73,23 +73,23 @@ def build_devices(now: datetime | None = None) -> list[Device]:
         Device(id="dev-02", name="Insulin Pump Hub", ip="192.168.4.22", type="Pump Hub", wing="Hospital-A", criticality=5, fl_client_id="Client-1", status=DeviceStatus.COMPROMISED),
         Device(id="dev-03", name="Ventilator Array B3", ip="192.168.4.50", type="Ventilator", wing="Hospital-B", criticality=5, fl_client_id="Client-2", status=DeviceStatus.NORMAL),
         Device(id="dev-04", name="Infusion System", ip="192.168.5.12", type="Infusion", wing="Hospital-B", criticality=4, fl_client_id="Client-2", status=DeviceStatus.NORMAL),
-        Device(id="dev-05", name="PACS Server", ip="10.0.0.100", type="Server", wing="Hospital-B", criticality=5, fl_client_id="Client-2", status=DeviceStatus.NORMAL),
+        Device(id="dev-05", name="PACS Server", ip="10.0.0.100", type="Server", wing="Hospital-C", criticality=5, fl_client_id="Client-3", status=DeviceStatus.NORMAL),
         Device(id="dev-06", name="Nurse Station 4F", ip="192.168.2.110", type="Workstation", wing="Hospital-C", criticality=3, fl_client_id="Client-3", status=DeviceStatus.NORMAL),
-        Device(id="dev-07", name="CT Scanner", ip="192.168.10.46", type="CT", wing="Hospital-C", criticality=4, fl_client_id="Client-3", status=DeviceStatus.NORMAL),
-        Device(id="dev-08", name="Patient Monitor 12", ip="192.168.4.12", type="Monitor", wing="Hospital-C", criticality=4, fl_client_id="Client-3", status=DeviceStatus.NORMAL),
-        Device(id="dev-09", name="Defibrillator", ip="192.168.6.5", type="Defibrillator", wing="Hospital-C", criticality=5, fl_client_id="Client-3", status=DeviceStatus.NORMAL),
-        Device(id="dev-10", name="Pharmacy Dispenser", ip="192.168.7.20", type="Dispenser", wing="Hospital-D", criticality=4, fl_client_id="Client-4", status=DeviceStatus.NORMAL),
-        Device(id="dev-11", name="Dialysis Machine", ip="192.168.8.15", type="Dialysis", wing="Hospital-D", criticality=5, fl_client_id="Client-4", status=DeviceStatus.NORMAL),
-        Device(id="dev-12", name="Incubator", ip="192.168.9.8", type="Incubator", wing="Hospital-D", criticality=5, fl_client_id="Client-4", status=DeviceStatus.NORMAL),
-        Device(id="dev-13", name="EEG Machine", ip="192.168.11.30", type="EEG", wing="Hospital-D", criticality=3, fl_client_id="Client-4", status=DeviceStatus.NORMAL),
-        Device(id="dev-14", name="Lab Analyzer", ip="192.168.12.10", type="Analyzer", wing="Hospital-A", criticality=4, fl_client_id="Client-1", status=DeviceStatus.NORMAL),
-        Device(id="dev-15", name="Admin Workstation", ip="192.168.1.50", type="Workstation", wing="Hospital-A", criticality=2, fl_client_id="Client-1", status=DeviceStatus.NORMAL),
+        Device(id="dev-07", name="CT Scanner", ip="192.168.10.46", type="CT", wing="Hospital-D", criticality=4, fl_client_id="Client-4", status=DeviceStatus.NORMAL),
+        Device(id="dev-08", name="Patient Monitor 12", ip="192.168.4.12", type="Monitor", wing="Hospital-D", criticality=4, fl_client_id="Client-4", status=DeviceStatus.NORMAL),
+        Device(id="dev-09", name="Defibrillator", ip="192.168.6.5", type="Defibrillator", wing="Hospital-E", criticality=5, fl_client_id="Client-5", status=DeviceStatus.NORMAL),
+        Device(id="dev-10", name="Pharmacy Dispenser", ip="192.168.7.20", type="Dispenser", wing="Hospital-E", criticality=4, fl_client_id="Client-5", status=DeviceStatus.NORMAL),
+        Device(id="dev-11", name="Dialysis Machine", ip="192.168.8.15", type="Dialysis", wing="Hospital-F", criticality=5, fl_client_id="Client-6", status=DeviceStatus.NORMAL),
+        Device(id="dev-12", name="Incubator", ip="192.168.9.8", type="Incubator", wing="Hospital-F", criticality=5, fl_client_id="Client-6", status=DeviceStatus.NORMAL),
+        Device(id="dev-13", name="EEG Machine", ip="192.168.11.30", type="EEG", wing="Hospital-G", criticality=3, fl_client_id="Client-7", status=DeviceStatus.NORMAL),
+        Device(id="dev-14", name="Lab Analyzer", ip="192.168.12.10", type="Analyzer", wing="Hospital-G", criticality=4, fl_client_id="Client-7", status=DeviceStatus.NORMAL),
+        Device(id="dev-15", name="Admin Workstation", ip="192.168.1.50", type="Workstation", wing="Hospital-H", criticality=2, fl_client_id="Client-8", status=DeviceStatus.NORMAL),
     ]
 
 
 _FL_ROUND_METRICS = [
     # (round, accuracy, fp_rate, train_loss, val_loss)
-    # Real FL training: 4 clients, FedAvg, warm-started from 84% base model
+    # Real FL training: 8 clients, FedAvg, warm-started from 84% base model
     (1,  83.21, 2.85, 0.3812, 0.4234),
     (2,  84.15, 2.71, 0.3645, 0.4108),
     (3,  85.02, 2.58, 0.3521, 0.3987),
@@ -112,10 +112,14 @@ def build_fl_rounds() -> list[FLRound]:
 
 def build_fl_clients() -> list[FLClient]:
     return [
-        FLClient(id="Client-1", department="Hospital-A", participation_pct=98, last_round=10, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
-        FLClient(id="Client-2", department="Hospital-B", participation_pct=95, last_round=10, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
-        FLClient(id="Client-3", department="Hospital-C", participation_pct=100, last_round=10, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
-        FLClient(id="Client-4", department="Hospital-D", participation_pct=97, last_round=10, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
+        FLClient(id="Client-1", department="Hospital-A", participation_pct=98, last_round=5, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
+        FLClient(id="Client-2", department="Hospital-B", participation_pct=95, last_round=5, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
+        FLClient(id="Client-3", department="Hospital-C", participation_pct=100, last_round=5, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
+        FLClient(id="Client-4", department="Hospital-D", participation_pct=97, last_round=5, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
+        FLClient(id="Client-5", department="Hospital-E", participation_pct=96, last_round=5, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
+        FLClient(id="Client-6", department="Hospital-F", participation_pct=99, last_round=5, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
+        FLClient(id="Client-7", department="Hospital-G", participation_pct=94, last_round=5, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
+        FLClient(id="Client-8", department="Hospital-H", participation_pct=97, last_round=5, dp_epsilon=0.0, model_version="fl-meta-v1", status=FLClientStatus.ACTIVE),
     ]
 
 

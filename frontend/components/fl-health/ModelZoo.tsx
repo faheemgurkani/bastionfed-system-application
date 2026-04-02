@@ -10,6 +10,10 @@ type FLStatusPartial = {
 };
 
 type ModelInfo = { accuracy: string; desc: string; tags: string[] };
+type ModelMetricsResponse = {
+  available: boolean;
+  models?: Record<string, { accuracy: number; samples: number; source?: string }>;
+};
 
 const GLOBAL_META: Record<string, ModelInfo> = {
   'fl-meta-v1': {
@@ -34,6 +38,10 @@ const CLIENT_LABELS: Record<number, string> = {
   2: 'Hospital-B',
   3: 'Hospital-C',
   4: 'Hospital-D',
+  5: 'Hospital-E',
+  6: 'Hospital-F',
+  7: 'Hospital-G',
+  8: 'Hospital-H',
 };
 
 const BRANCH_META: Record<string, { accuracy: string; desc: string; tag: string }> = {
@@ -57,6 +65,7 @@ export function ModelZoo() {
   const [activeModel, setActiveModel] = useState<string>('fl-meta-v1');
   const [modelZoo, setModelZoo] = useState<string[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
+  const [metrics, setMetrics] = useState<Record<string, { accuracy: number; samples: number; source?: string }>>({});
 
   useEffect(() => {
     if (authLoading) return;
@@ -88,6 +97,39 @@ export function ModelZoo() {
     }
 
     void load();
+    return () => {
+      cancelled = true;
+      ac.abort();
+    };
+  }, [authLoading, isGuest, user]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+    const ac = new AbortController();
+
+    async function loadMetrics() {
+      try {
+        let data: ModelMetricsResponse;
+        if (isGuest) {
+          data = await apiFetchJson<ModelMetricsResponse>('/api/fl/models/metrics', { guest: true, signal: ac.signal });
+        } else if (user) {
+          const token = await user.getIdToken();
+          data = await apiFetchJson<ModelMetricsResponse>('/api/fl/models/metrics', {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
+          });
+        } else {
+          return;
+        }
+        if (!cancelled && data.available && data.models) setMetrics(data.models);
+      } catch (e) {
+        if (isAbortError(e)) return;
+        // ignore metrics failure (keep hardcoded fallbacks)
+      }
+    }
+
+    void loadMetrics();
     return () => {
       cancelled = true;
       ac.abort();
@@ -127,6 +169,8 @@ export function ModelZoo() {
   function renderCard(name: string, meta: ModelInfo) {
     const isActive = name === activeModel;
     const isLoading = switching === name;
+    const measured = metrics[name];
+    const accuracyText = measured ? `${measured.accuracy.toFixed(2)}%` : meta.accuracy;
     return (
       <div
         key={name}
@@ -136,7 +180,7 @@ export function ModelZoo() {
       >
         <div className="flex justify-between items-start">
           <span className="font-mono text-sm text-white">{name}</span>
-          <span className="font-mono text-sm text-white">{meta.accuracy}</span>
+          <span className="font-mono text-sm text-white">{accuracyText}</span>
         </div>
         <p className="text-xs text-text-secondary flex-1">{meta.desc}</p>
         <div className="flex gap-1.5 flex-wrap">

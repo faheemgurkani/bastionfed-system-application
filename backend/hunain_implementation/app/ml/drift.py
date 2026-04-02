@@ -284,7 +284,7 @@ def get_drift_report() -> dict:
 
 def get_per_client_drift() -> dict:
     """
-    Per-client drift monitoring — dummy data for 4 FL clients.
+    Per-client drift monitoring — dummy data for 8 FL clients.
     Each client has its own FV + Image drift scores relative to
     that client's local training distribution.
     """
@@ -294,8 +294,11 @@ def get_per_client_drift() -> dict:
 
     random.seed(int(time.time()) // 30)
 
+    _HOSPITAL_NAMES = ["Hospital-A", "Hospital-B", "Hospital-C", "Hospital-D",
+                       "Hospital-E", "Hospital-F", "Hospital-G", "Hospital-H"]
+
     clients = []
-    for cid in range(1, 5):
+    for cid in range(1, 9):
         r = random.Random(cid * 1000 + int(time.time()) // 60)
 
         fv_score = round(r.uniform(0.3, 0.9) * _fv_tau, 4)
@@ -313,7 +316,7 @@ def get_per_client_drift() -> dict:
 
         clients.append({
             "clientId": f"Client-{cid}",
-            "department": f"Hospital-{chr(64 + cid)}",
+            "department": _HOSPITAL_NAMES[cid - 1],
             "fvDrift": {"score": fv_score, "status": fv_status, "tau": round(_fv_tau, 4)},
             "imgDrift": {"score": img_score, "status": img_status_val, "tau": round(_img_tau, 4)},
             "combinedScore": combined,
