@@ -127,6 +127,10 @@ interface SplitFlapTextProps {
 
 const CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split("")
 
+function randomCharsetChar() {
+  return CHARSET[Math.floor(Math.random() * CHARSET.length)] ?? " "
+}
+
 function SplitFlapTextInner({ text, className = "", speed = 50 }: SplitFlapTextProps) {
   const chars = useMemo(() => text.split(""), [text])
   const [animationKey, setAnimationKey] = useState(0)
@@ -159,7 +163,7 @@ function SplitFlapTextInner({ text, className = "", speed = 50 }: SplitFlapTextP
           animationKey={animationKey}
           skipEntrance={hasInitialized}
           speed={speed}
-          playClick={audio?.playClick}
+          {...(audio?.playClick ? { playClick: audio.playClick } : {})}
         />
       ))}
     </div>
@@ -176,7 +180,7 @@ interface SplitFlapCharProps {
   animationKey: number
   skipEntrance: boolean
   speed: number
-  playClick?: () => void
+  playClick?: (() => void) | undefined
 }
 
 function SplitFlapChar({ char, index, animationKey, skipEntrance, speed, playClick }: SplitFlapCharProps) {
@@ -203,7 +207,7 @@ function SplitFlapChar({ char, index, animationKey, skipEntrance, speed, playCli
     }
 
     setIsSettled(false)
-    setCurrentChar(CHARSET[Math.floor(Math.random() * CHARSET.length)])
+    setCurrentChar(randomCharsetChar())
 
     const baseFlips = 8
     const startDelay = skipEntrance ? tileDelay * 400 : tileDelay * 800
@@ -222,7 +226,7 @@ function SplitFlapChar({ char, index, animationKey, skipEntrance, speed, playCli
           if (playClick) playClick()
           return
         }
-        setCurrentChar(CHARSET[Math.floor(Math.random() * CHARSET.length)])
+        setCurrentChar(randomCharsetChar())
         if (flipIndex % 2 === 0 && playClick) playClick()
         flipIndex++
       }, speed)

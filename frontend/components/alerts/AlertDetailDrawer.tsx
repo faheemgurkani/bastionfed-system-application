@@ -13,7 +13,7 @@ interface AlertDetailDrawerProps {
 }
 
 export function AlertDetailDrawer({ alert, onClose }: AlertDetailDrawerProps) {
-  const { user, isGuest } = useAuth();
+  const { user, isDevMode } = useAuth();
   const { replaceAlert } = useAlertsContext();
   const [activeTab, setActiveTab] = useState('summary');
   const [localAlert, setLocalAlert] = useState(alert);
@@ -32,8 +32,8 @@ export function AlertDetailDrawer({ alert, onClose }: AlertDetailDrawerProps) {
 
   async function patchStatus(status: Alert['status']) {
     setActionError(null);
-    if (isGuest || !user) {
-      setActionError('Sign in with Google to change alert status.');
+    if (isDevMode || !user) {
+      setActionError('Sign in to change alert status.');
       return;
     }
     setBusy(true);
@@ -54,7 +54,7 @@ export function AlertDetailDrawer({ alert, onClose }: AlertDetailDrawerProps) {
 
   async function quarantineDevice() {
     setActionError(null);
-    if (isGuest || !user) {
+    if (isDevMode || !user) {
       setActionError('Sign in to quarantine devices.');
       return;
     }

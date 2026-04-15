@@ -4,7 +4,7 @@ import { AuthGate } from "@/components/auth/AuthGate";
 import { AlertTable } from "@/components/alerts/AlertTable";
 import { AlertFilters } from "@/components/alerts/AlertFilters";
 import { useAlertsContext } from "@/contexts/alerts-context";
-import { useState, useMemo } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Alert } from "@/lib/types";
 
@@ -64,7 +64,7 @@ function filterAndSortAlerts(
   return result;
 }
 
-export default function AlertsPage() {
+function AlertsPageContent() {
   const { alerts, alertsLoading, alertsError } = useAlertsContext();
   const searchParams = useSearchParams();
   const [activeSeverity, setActiveSeverity] = useState<string>("ALL");
@@ -105,5 +105,13 @@ export default function AlertsPage() {
         </div>
       </div>
     </AuthGate>
+  );
+}
+
+export default function AlertsPage() {
+  return (
+    <Suspense fallback={<AuthGate><div className="flex h-full items-center justify-center text-sm font-mono text-text-muted">Loading alerts…</div></AuthGate>}>
+      <AlertsPageContent />
+    </Suspense>
   );
 }

@@ -82,6 +82,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ## Related docs
 
+- [`../BLUE_TEAM_APPLICATION_SPEC.md`](../BLUE_TEAM_APPLICATION_SPEC.md) — claims vs implementation for security / blue-team review (includes recent FL health & metrics changes)
 - [`HUNAIN_BACKEND_TODO.md`](./HUNAIN_BACKEND_TODO.md)
 - [`HUNAIN_LOCAL_TESTING.md`](./HUNAIN_LOCAL_TESTING.md)
 - [`../BASTIONBOT_ASK_MODE.md`](../BASTIONBOT_ASK_MODE.md)

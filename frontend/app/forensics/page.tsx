@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { AuthGate } from '@/components/auth/AuthGate';
+import { StorageBucketsPanel } from '@/components/storage/StorageBucketsPanel';
+import { ClientArtifactsSection } from '@/components/storage/ClientArtifactsSection';
 import { SampleList } from '@/components/forensics/SampleList';
 import { AnalysisReport } from '@/components/forensics/AnalysisReport';
 import { MalwareSample } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
-import { apiFetchJson, apiUrl, ApiError, isAbortError } from '@/lib/api';
+import { useViewMode } from '@/contexts/view-mode-context';
+import { apiFetchJson, apiUrl, ApiError, getClientViewIdsForRequests, isAbortError } from '@/lib/api';
 
 type SampleListResponse = {
   items: MalwareSample[];
@@ -34,7 +37,8 @@ const MODE_LABELS: Record<InferenceMode, string> = {
 };
 
 export default function ForensicsPage() {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [samples, setSamples] = useState<MalwareSample[]>([]);
   const [selectedSample, setSelectedSample] = useState<MalwareSample | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,12 +74,16 @@ export default function ForensicsPage() {
       const formData = new FormData();
       if (showImage && imageFile) formData.append('file', imageFile);
       if (showFV && fvFile) formData.append('fv_file', fvFile);
-      const url = isGuest
-        ? apiUrl('/api/forensics/analyze') + '?guest=true'
+      const url = isDevMode
+        ? apiUrl('/api/forensics/analyze') + '?dev=true'
         : apiUrl('/api/forensics/analyze');
       const headers: Record<string, string> = {};
-      if (!isGuest && user) {
+      if (!isDevMode && user) {
         headers['Authorization'] = `Bearer ${await user.getIdToken()}`;
+      }
+      const cv = getClientViewIdsForRequests();
+      if (cv && !isDevMode) {
+        headers['X-Client-View-Ids'] = cv;
       }
       const res = await fetch(url, { method: 'POST', headers, body: formData });
       if (!res.ok) {
@@ -110,8 +118,8 @@ export default function ForensicsPage() {
     const ac = new AbortController();
     async function fetchModel() {
       try {
-        const data = isGuest
-          ? await apiFetchJson<{ activeModel: string }>('/api/fl/status', { guest: true, signal: ac.signal })
+        const data = isDevMode
+          ? await apiFetchJson<{ activeModel: string }>('/api/fl/status', { devMode: true, signal: ac.signal })
           : user
             ? await apiFetchJson<{ activeModel: string }>('/api/fl/status', {
                 headers: { Authorization: `Bearer ${await user.getIdToken()}` },
@@ -131,7 +139,7 @@ export default function ForensicsPage() {
     }
     void fetchModel();
     return () => ac.abort();
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, user, viewScopeKey]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -141,8 +149,8 @@ export default function ForensicsPage() {
       setError(null);
       try {
         let data: SampleListResponse;
-        if (isGuest) {
-          data = await apiFetchJson<SampleListResponse>('/api/forensics/samples', { guest: true, signal: ac.signal });
+        if (isDevMode) {
+          data = await apiFetchJson<SampleListResponse>('/api/forensics/samples', { devMode: true, signal: ac.signal });
         } else if (user) {
           const token = await user.getIdToken();
           data = await apiFetchJson<SampleListResponse>('/api/forensics/samples', { headers: { Authorization: `Bearer ${token}` }, signal: ac.signal });
@@ -163,7 +171,7 @@ export default function ForensicsPage() {
     }
     void load();
     return () => { cancelled = true; ac.abort(); };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, user, viewScopeKey]);
 
   return (
     <AuthGate>
@@ -171,6 +179,9 @@ export default function ForensicsPage() {
         {error && (
           <p className="text-sm font-mono text-severity-high px-1">{error}</p>
         )}
+
+        <StorageBucketsPanel />
+        <ClientArtifactsSection />
 
         <div className="border border-white/10 bg-white/[0.02] p-4">
           {/* Header row: title + active model badge */}

@@ -4,22 +4,43 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useActiveRoute } from '@/hooks/use-active-route';
 import { useAuth } from '@/contexts/auth-context';
-import { Bell, Search, LogOut, ArrowRight } from 'lucide-react';
+import { useViewMode } from '@/contexts/view-mode-context';
+import { useFLClients } from '@/contexts/fl-clients-context';
+import { Bell, LogOut, ArrowRight, Layers } from 'lucide-react';
 import { useAlerts } from '@/hooks/use-alerts';
+import { useActiveIncidentsCount } from '@/hooks/use-active-incidents-count';
 
 const SEVERITY_COLOR: Record<string, string> = {
   CRITICAL: 'text-red-400',
   HIGH: 'text-orange-400',
 };
 
+function clientLabel(c: { id: string; department: string; nodeName?: string | null }): string {
+  return c.nodeName?.trim() || c.department || c.id;
+}
+
 export function Header({ sidebarCollapsed = false }: { sidebarCollapsed?: boolean }) {
   const activeRoute = useActiveRoute();
   const router = useRouter();
-  const { user, loading, isGuest, signOutUser } = useAuth();
-  const signedInUser = !isGuest ? user : null;
+  const { user, loading, isDevMode, signOutUser, role } = useAuth();
+  const {
+    canUseAdminClientView,
+    mode: adminViewMode,
+    setMode: setAdminViewMode,
+    selectedClientId,
+    setSelectedClientId,
+  } = useViewMode();
+  const flClients = useFLClients();
+  const signedInUser = !isDevMode ? user : null;
   const alerts = useAlerts();
+  const activeIncidentsCount = useActiveIncidentsCount();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const isClientUser = role === 'client_user';
+  const clientScopeLabels = isClientUser
+    ? flClients.map((c) => clientLabel(c)).filter(Boolean)
+    : [];
 
   const priorityAlerts = alerts
     .filter((a) => (a.severity === 'CRITICAL' || a.severity === 'HIGH') && a.status === 'OPEN')
@@ -39,7 +60,6 @@ export function Header({ sidebarCollapsed = false }: { sidebarCollapsed?: boolea
     return 'DASHBOARD';
   };
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -60,20 +80,93 @@ export function Header({ sidebarCollapsed = false }: { sidebarCollapsed?: boolea
         <h1 className="font-display text-24px text-white uppercase tracking-tight">{getPageTitle()}</h1>
       </div>
 
-      <div className="flex-1 max-w-md mx-8">
-        <div className="relative group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-hover:text-text-secondary transition-colors" />
-          <input
-            type="text"
-            placeholder="⌘K to search"
-            className="w-full bg-bg-surface border border-border-default rounded-md py-1.5 pl-9 pr-4 text-sm text-white placeholder:text-text-muted focus:outline-none focus:border-border-focus transition-all duration-150"
-            readOnly
-          />
-        </div>
+      {/* Centre: view-scope control */}
+      <div className="flex min-w-0 flex-1 justify-center px-4">
+        {/* Admin: all-clients / single-client toggle */}
+        {canUseAdminClientView && (
+          <div className="flex min-w-0 max-w-4xl flex-wrap items-center justify-center gap-x-3 gap-y-2">
+            <div className="flex min-w-0 flex-shrink-0 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div
+                className="inline-flex shrink-0 rounded-lg border border-white/[0.08] bg-bg-surface p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                role="group"
+                aria-label="Client data scope"
+              >
+                <button
+                  type="button"
+                  onClick={() => setAdminViewMode('tenant')}
+                  className={`rounded-md px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-all duration-150 ${
+                    adminViewMode === 'tenant'
+                      ? 'bg-white text-black shadow-sm'
+                      : 'text-text-muted hover:bg-white/[0.04] hover:text-white'
+                  }`}
+                >
+                  All clients
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdminViewMode('client')}
+                  className={`rounded-md px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-all duration-150 ${
+                    adminViewMode === 'client'
+                      ? 'bg-white text-black shadow-sm'
+                      : 'text-text-muted hover:bg-white/[0.04] hover:text-white'
+                  }`}
+                >
+                  Single client
+                </button>
+              </div>
+
+              {adminViewMode === 'client' && (
+                <select
+                  aria-label="FL client for admin client view"
+                  title="FL client for admin client view"
+                  value={selectedClientId ?? ''}
+                  onChange={(e) => setSelectedClientId(e.target.value || null)}
+                  className="h-[36px] min-w-[11rem] max-w-[16rem] rounded-lg border-2 border-white/45 bg-bg-surface px-3 pr-8 text-[11px] font-semibold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_24px_-4px_rgba(0,0,0,0.55)] ring-1 ring-white/15 transition-[border-color,box-shadow] focus:border-white focus:outline-none focus:ring-2 focus:ring-white/30"
+                >
+                  <option value="">Select client node…</option>
+                  {flClients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {clientLabel(c)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {adminViewMode === 'client' && selectedClientId ? (
+              <p className="max-w-[min(18rem,calc(100vw-12rem))] shrink text-left text-[10px] font-mono leading-snug tracking-wide text-amber-400/90 sm:border-l sm:border-white/[0.12] sm:pl-3">
+                <span className="text-text-muted">Previewing</span>{' '}
+                <span className="text-white/90">
+                  {clientLabel(
+                    flClients.find((c) => c.id === selectedClientId) ?? {
+                      id: selectedClientId,
+                      department: selectedClientId,
+                    },
+                  )}
+                </span>
+              </p>
+            ) : adminViewMode === 'tenant' ? (
+              <p className="shrink-0 text-left text-[10px] font-mono leading-snug tracking-wide text-emerald-400/85 sm:border-l sm:border-white/[0.12] sm:pl-3">
+                Showing all client data
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        {/* Client user: site-scope indicator */}
+        {isClientUser && !isDevMode && (
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-text-muted shrink-0" aria-hidden />
+            <span className="text-[11px] font-mono text-text-muted uppercase tracking-wider">Site scope:</span>
+            <span className="text-[11px] font-medium text-white truncate">
+              {clientScopeLabels.length > 0 ? clientScopeLabels.join(', ') : 'Loading…'}
+            </span>
+            <span className="text-[10px] font-mono text-text-muted whitespace-nowrap">· your data only</span>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-4">
-        {/* Bell — hidden when already on /alerts */}
         {!onAlerts && (
           <div ref={dropdownRef} className="relative">
             <button
@@ -92,7 +185,6 @@ export function Header({ sidebarCollapsed = false }: { sidebarCollapsed?: boolea
 
             {dropdownOpen && (
               <div className="absolute right-0 top-[calc(100%+12px)] w-80 bg-bg-surface border border-border-default shadow-xl z-50">
-                {/* Header row */}
                 <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-default">
                   <span className="font-mono text-[11.5px] font-bold uppercase tracking-[0.25em] text-white">
                     Critical &amp; High Alerts
@@ -102,7 +194,6 @@ export function Header({ sidebarCollapsed = false }: { sidebarCollapsed?: boolea
                   </span>
                 </div>
 
-                {/* Alert list */}
                 <ul className="divide-y divide-border-default max-h-72 overflow-y-auto">
                   {priorityAlerts.length === 0 ? (
                     <li className="px-4 py-4 text-xs font-mono text-text-muted text-center">
@@ -136,7 +227,6 @@ export function Header({ sidebarCollapsed = false }: { sidebarCollapsed?: boolea
                   )}
                 </ul>
 
-                {/* Footer — navigate to alerts */}
                 <button
                   type="button"
                   onClick={() => {
@@ -156,7 +246,9 @@ export function Header({ sidebarCollapsed = false }: { sidebarCollapsed?: boolea
         <div className="w-px h-6 bg-border-default" />
 
         <div className="border border-border-strong bg-bg-overlay text-xs font-mono uppercase tracking-wider px-3 py-1 rounded-full text-white">
-          {signedInUser ? '3 INCIDENTS' : 'GUEST'}
+          {signedInUser
+            ? `${activeIncidentsCount} ${activeIncidentsCount === 1 ? 'INCIDENT' : 'INCIDENTS'}`
+            : 'DEV'}
         </div>
 
         <div className="w-px h-6 bg-border-default" />
@@ -169,8 +261,8 @@ export function Header({ sidebarCollapsed = false }: { sidebarCollapsed?: boolea
               <LogOut className="w-4 h-4" />
             </button>
           </div>
-        ) : isGuest ? (
-          <button onClick={signOutUser} className="p-1.5 text-text-muted hover:text-white transition-colors" title="Exit guest">
+        ) : isDevMode ? (
+          <button onClick={signOutUser} className="p-1.5 text-text-muted hover:text-white transition-colors" title="Exit dev mode">
             <LogOut className="w-4 h-4" />
           </button>
         ) : null}

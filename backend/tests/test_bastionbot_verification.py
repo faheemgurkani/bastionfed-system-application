@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.bastionbot import bastionbot_engine, bastionbot_store
 from app.config import settings
-from app.store.memory import state
+from app.store.tenant_store import tenant_store
 
 
 def _chat(client, headers: dict[str, str], *, message: str, conversation_id: str | None = None):
@@ -76,8 +76,8 @@ def test_bastionbot_memory_and_history_survive_store_reconfigure(client, auth_he
     db_path = settings.bastionbot_db_path
     bastionbot_store.configure(db_path)
 
-    memory = bastionbot_store.get_user_memory("user-faheem")
-    history = bastionbot_store.get_conversation_history("user-faheem", conversation_id)
+    memory = bastionbot_store.get_user_memory(settings.demo_tenant_id, "user-faheem")
+    history = bastionbot_store.get_conversation_history(settings.demo_tenant_id, "user-faheem", conversation_id)
 
     assert memory is not None
     assert memory.last_active_conversation_id == conversation_id
@@ -87,13 +87,13 @@ def test_bastionbot_memory_and_history_survive_store_reconfigure(client, auth_he
 
 
 def test_bastionbot_chat_writes_audit_log_entry(client, auth_headers: dict[str, str]):
-    before = len(state.audit_logs)
+    before = tenant_store.list_audit_logs(settings.demo_tenant_id, limit=200)[2]
 
     response = _chat(client, auth_headers, message="Summarize the current audit workflow.")
     assert response.status_code == 200
 
-    after = len(state.audit_logs)
-    latest = state.audit_logs[-1]
+    items, _, after = tenant_store.list_audit_logs(settings.demo_tenant_id, limit=200)
+    latest = next(item for item in reversed(items) if item.target == response.json()["conversationId"])
 
     assert after == before + 1
     assert latest.actor == "user-faheem"
@@ -107,7 +107,8 @@ def test_bastionbot_engine_uses_local_fallback_when_groq_key_missing():
     try:
         result = bastionbot_engine.answer(
             query="How does the audit verification feature work?",
-            state=state,
+            tenant_store=tenant_store,
+            tenant_id=settings.demo_tenant_id,
             memory=None,
             history=[],
             context=None,
@@ -118,4 +119,3 @@ def test_bastionbot_engine_uses_local_fallback_when_groq_key_missing():
     assert result.sources
     assert "grounded" in result.answer.lower()
     assert "**Sources**" in result.answer
-

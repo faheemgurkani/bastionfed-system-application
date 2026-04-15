@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 import { Alert } from '@/lib/types';
 import { apiFetchJson, ApiError, eventsSourceUrl, isAbortError } from '@/lib/api';
 
@@ -22,7 +23,8 @@ export type AlertsContextValue = {
 const AlertsContext = createContext<AlertsContextValue | undefined>(undefined);
 
 export function AlertsProvider({ children }: { children: React.ReactNode }) {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode, sessionReady } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [alertsLoading, setAlertsLoading] = useState(true);
   const [alertsError, setAlertsError] = useState<string | null>(null);
@@ -42,13 +44,13 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       setAlertsLoading(true);
       setAlertsError(null);
       try {
-        if (isGuest) {
+        if (isDevMode) {
           const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
-            guest: true,
+            devMode: true,
             signal: ac.signal,
           });
           if (!cancelled) setAlerts(data.items);
-        } else if (user) {
+        } else if (user && sessionReady) {
           const token = await user.getIdToken();
           const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
             headers: { Authorization: `Bearer ${token}` },
@@ -58,7 +60,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
         } else {
           if (!cancelled) {
             setAlerts([]);
-            setAlertsError('Sign in or continue as guest to load alerts.');
+            setAlertsError('Sign in or continue in dev mode to load alerts.');
           }
         }
       } catch (e) {
@@ -77,7 +79,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, sessionReady, user, viewScopeKey]);
 
   // SSE: /api/events on FastAPI
   useEffect(() => {
@@ -87,9 +89,9 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
 
     async function connect() {
       let url: string;
-      if (isGuest) {
+      if (isDevMode) {
         url = eventsSourceUrl(null, true);
-      } else if (user) {
+      } else if (user && sessionReady) {
         const token = await user.getIdToken();
         if (closed) return;
         url = eventsSourceUrl(token, false);
@@ -115,7 +117,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       closed = true;
       es?.close();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, sessionReady, user, viewScopeKey]);
 
   const value = useMemo(
     () => ({

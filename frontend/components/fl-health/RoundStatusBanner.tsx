@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -24,7 +25,8 @@ function formatCountdown(seconds: number): string {
 }
 
 export function RoundStatusBanner() {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [status, setStatus] = useState<FLStatus | null>(null);
   const [remaining, setRemaining] = useState(180);
 
@@ -38,8 +40,8 @@ export function RoundStatusBanner() {
       ac = new AbortController();
       const sig = ac.signal;
       try {
-        if (isGuest) {
-          const data = await apiFetchJson<FLStatus>('/api/fl/status', { guest: true, signal: sig });
+        if (isDevMode) {
+          const data = await apiFetchJson<FLStatus>('/api/fl/status', { devMode: true, signal: sig });
           if (!cancelled) setStatus(data);
         } else if (user) {
           const token = await user.getIdToken();
@@ -62,7 +64,7 @@ export function RoundStatusBanner() {
       ac.abort();
       clearInterval(id);
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, user, viewScopeKey]);
 
   useEffect(() => {
     if (status) setRemaining(status.nextRoundIn);

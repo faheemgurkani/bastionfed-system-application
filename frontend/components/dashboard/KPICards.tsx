@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 import { useEffect, useState } from 'react';
 
@@ -16,7 +17,8 @@ export type DashboardKpis = {
 };
 
 export function KPICards() {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode, sessionReady } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,13 +29,13 @@ export function KPICards() {
 
     async function load() {
       try {
-        if (isGuest) {
+        if (isDevMode) {
           const data = await apiFetchJson<DashboardKpis>('/api/dashboard/kpis', {
-            guest: true,
+            devMode: true,
             signal: ac.signal,
           });
           if (!cancelled) setKpis(data);
-        } else if (user) {
+        } else if (user && sessionReady) {
           const token = await user.getIdToken();
           const data = await apiFetchJson<DashboardKpis>('/api/dashboard/kpis', {
             headers: { Authorization: `Bearer ${token}` },
@@ -57,7 +59,7 @@ export function KPICards() {
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, user, sessionReady, viewScopeKey]);
 
   const activeThreats = kpis?.activeThreats ?? '—';
   const avgConfidence = kpis != null ? kpis.avgConfidence.toFixed(1) : '—';

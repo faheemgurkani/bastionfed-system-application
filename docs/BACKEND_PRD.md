@@ -180,6 +180,10 @@ class FLRound(BaseModel):
 ### 2.7 `FLClient`
 
 ```python
+class FLClientType(str, Enum):
+    DEVICE = "DEVICE"   # node scope; admin can use client view
+    PERSON = "PERSON"   # human operators; invites require email
+
 class FLClient(BaseModel):
     id               : str    # e.g. "Cardiology-FL-01"
     department       : str
@@ -188,6 +192,7 @@ class FLClient(BaseModel):
     dpEpsilon        : float
     modelVersion     : str
     status           : FLClientStatus
+    clientType       : FLClientType = FLClientType.DEVICE
 ```
 
 ### 2.8 `FLClientPatch` (used in SSE stream)
@@ -200,6 +205,7 @@ class FLClientPatch(BaseModel):
     status           : FLClientStatus | None = None
     dpEpsilon        : float | None = None
     modelVersion     : str   | None = None
+    clientType       : FLClientType | None = None
 ```
 
 ### 2.9 `PlaybookStep`
@@ -344,14 +350,21 @@ class BotMessage(BaseModel):
 
 ## 3. Authentication
 
-The frontend uses Firebase Auth (Google OAuth + guest mode). The backend must validate Firebase ID tokens using the **Firebase Admin SDK**.
+The frontend uses Firebase Auth (**Google OAuth** and **email/password** for invited client users) plus optional **dev/demo read mode** when `DEMO_MODE=1`. Dev mode (`?dev=true`) is a **read-only demo tenant** for engineers — it is **not** the same as signing into a real tenant as owner/admin/client. The backend validates Firebase ID tokens using the **Firebase Admin SDK**.
 
 ### Middleware
 
-All endpoints (except the SSE streams, which accept `?token=`) must verify the `Authorization: Bearer <firebase_id_token>` header. Guest mode is allowed for read-only GET endpoints — the frontend will send a `?guest=true` query param instead of a token when operating in guest mode.
+All endpoints (except the SSE streams, which accept `?token=`) must verify the `Authorization: Bearer <firebase_id_token>` header unless the caller uses **dev mode**: read-only GET access to the demo tenant via **`?dev=true`** (legacy **`?guest=true`** is still accepted). Mutations and BastionBot require a signed-in user.
+
+**Admin client view (no DB membership change)**: For **`owner`** / **`admin`** only, optional header **`X-Client-View-Ids`** (comma-separated FL client ids) scopes list/detail queries the same way as `client_user`, without writing `membership_client_scopes`. Unknown ids → `400` with `INVALID_CLIENT_VIEW_IDS`.
+
+**Account types**: `POST /api/auth/session` accepts optional `accountType`: `SYSTEM_OWNER` (default) creates a tenant on first login; `CLIENT_USER` without a prior invite returns `needsClientInvite`. **`GET /api/auth/bootstrap`** returns whether the user already has a membership (for first-sign-in UX). **Client/site users** are onboarded with `POST /api/access/invites/client` (owner/admin; **email required** if any selected FL client has `clientType=PERSON`) and `POST /api/access/invites/client/accept` (signed-in user + token). **`GET /api/access/invites/client`** lists invites for the tenant. **`client_user`** role is scoped by `membership_client_scopes` (allowed `fl_client_id` values); list/detail queries filter accordingly. **BastionBot** live grounding uses the same scope.
+
+**FL clients** expose `clientType`: `DEVICE` (default, node scope / admin view) or `PERSON` (human operators). Owners/admins can **`PATCH /api/fl/clients/{clientId}`** with `{ "clientType": "DEVICE" | "PERSON" }`.
 
 ```
 POST /api/auth/session
+GET /api/auth/bootstrap
 ```
 
 **Brief**: Called by the frontend immediately after a successful Firebase sign-in to let the backend upsert the user profile and start a server-side session record.
@@ -386,6 +399,8 @@ POST /api/auth/session
 ```
 GET /api/events
 ```
+
+**Query**: Authenticated streams use **`?token=<firebase_id_token>`**. Owners/admins may add **`&clientViewIds=<comma-separated FL client ids>`** to mirror **`X-Client-View-Ids`** (same validation as HTTP).
 
 **Brief**: Server-Sent Events stream that pushes new `Alert` objects to the frontend in real time as the BastionFed inference engine generates detections. This is the single most critical endpoint — it powers the dashboard `KPICards`, `EventsFeed`, `NetworkTopology`, and the full `AlertTable` on `/alerts`.
 

@@ -55,6 +55,11 @@
 }
 
 :root {
+  --font-inter: "Avenir Next", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-jetbrains-mono: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  --font-space-mono: "Space Mono", "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+  --font-bebas: "Bebas Neue", Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
+
   --bg-base: #000000;
   --bg-surface: #0a0a0a;
   --bg-elevated: #111111;
@@ -147,12 +152,12 @@ h6 {
 /* WebGL hero panel — radial vignette mask so the canvas fades into the page background */
 .hero-webgl-mask {
   -webkit-mask-image: radial-gradient(
-    ellipse 64% 68% at 50% 50%,
+    64% 68% at 50% 50%,
     black 44%,
     transparent 99%
   );
   mask-image: radial-gradient(
-    ellipse 64% 68% at 50% 50%,
+    64% 68% at 50% 50%,
     black 44%,
     transparent 99%
   );
@@ -166,4 +171,28 @@ h6 {
 .no-scrollbar {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
+}
+
+/* Onboarding / auth surfaces — one smooth entrance */
+@keyframes bastionfed-onboard-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.bastionfed-onboard-surface {
+  animation: bastionfed-onboard-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bastionfed-onboard-surface {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }

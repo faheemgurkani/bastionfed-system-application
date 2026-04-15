@@ -1,0 +1,1 @@
+"""Database persistence (Supabase Postgres)."""

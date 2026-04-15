@@ -6,9 +6,9 @@ import { ChatInterface } from '@/components/bastionbot/ChatInterface';
 import { useAuth } from '@/contexts/auth-context';
 
 export default function BastionBotPage() {
-  const { user, loading, isGuest, signInWithGoogle } = useAuth();
+  const { user, loading, isDevMode, signInWithGoogle } = useAuth();
   const [googleBusy, setGoogleBusy] = useState(false);
-  const signedInUser = !isGuest ? user : null;
+  const signedInUser = !isDevMode ? user : null;
 
   async function handleGoogleSignIn() {
     if (googleBusy) return;
@@ -44,7 +44,7 @@ export default function BastionBotPage() {
             <h2 className="text-xl font-medium text-white">Sign-in Required</h2>
             <p className="mt-3 text-sm text-text-secondary">
               BastionBot is only available to users who sign up or sign in because conversation history and memory are isolated per user.
-              {isGuest ? ' Guest mode can still browse the platform, but it cannot use BastionBot until you sign up or sign in.' : ''}
+              {isDevMode ? ' Dev mode can browse the read-only demo tenant, but BastionBot requires a signed-in account.' : ''}
             </p>
             <button
               onClick={() => void handleGoogleSignIn()}

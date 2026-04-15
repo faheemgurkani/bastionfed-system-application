@@ -9,7 +9,6 @@ from app.bastionbot.knowledge import KnowledgeRegistry
 from app.bastionbot.storage import BotUserMemory
 from app.config import settings
 from app.models.domain import Alert, BotChatContext, Device, Incident, SourceCitation
-from app.store.memory import AppState
 import httpx
 
 
@@ -42,10 +41,13 @@ class BastionBotEngine:
         self,
         *,
         query: str,
-        state: AppState,
+        tenant_store,
+        tenant_id: str,
         memory: BotUserMemory | None,
         history: list[str],
         context: BotChatContext | None = None,
+        fl_client_ids: list[str] | None = None,
+        audit_scope_firebase_uid: str | None = None,
     ) -> AskResult:
         classification = self._classify_query(query)
         context_terms = list(history[-2:]) if history else []
@@ -57,7 +59,14 @@ class BastionBotEngine:
             context_terms.append(context.incident_id)
 
         doc_entries = self.registry.search(query, limit=4, boosts=context_terms)
-        live_citations, live_points = self._live_context(query=query, state=state, context=context)
+        live_citations, live_points = self._live_context(
+            query=query,
+            tenant_store=tenant_store,
+            tenant_id=tenant_id,
+            context=context,
+            fl_client_ids=fl_client_ids,
+            audit_scope_firebase_uid=audit_scope_firebase_uid,
+        )
         sources = live_citations + [self.registry.to_citation(entry, idx + len(live_citations) + 1) for idx, entry in enumerate(doc_entries)]
         memory_used = bool(history or (memory and memory.recent_topics))
         topics = self._derive_topics(query=query, classification=classification, sources=sources)
@@ -102,7 +111,7 @@ class BastionBotEngine:
         q = query.lower()
         guidance: list[str] = []
         if "alert" in q:
-            guidance.append("Use the Alerts page for live triage. Guests can inspect alerts, but only signed-in analysts can change alert status or quarantine devices.")
+            guidance.append("Use the Alerts page for live triage. Dev mode can inspect read-only demo data; signed-in analysts can change alert status or quarantine devices.")
         if "incident" in q:
             guidance.append("Use the Incidents board for the list view, then open incident detail for timelines and playbook context.")
         if "audit" in q:
@@ -280,8 +289,11 @@ class BastionBotEngine:
         self,
         *,
         query: str,
-        state: AppState,
+        tenant_store,
+        tenant_id: str,
         context: BotChatContext | None,
+        fl_client_ids: list[str] | None = None,
+        audit_scope_firebase_uid: str | None = None,
     ) -> tuple[list[SourceCitation], list[str]]:
         citations: list[SourceCitation] = []
         points: list[str] = []
@@ -292,7 +304,7 @@ class BastionBotEngine:
         device_id = self._first_match(r"DEV-[A-Z0-9-]+", q)
 
         if alert_id:
-            alert = state.get_alert(alert_id)
+            alert = tenant_store.get_alert(tenant_id, alert_id, fl_client_ids=fl_client_ids)
             if alert:
                 citations.append(self._alert_citation(alert))
                 points.append(
@@ -300,7 +312,7 @@ class BastionBotEngine:
                     f"currently `{alert.status}` with MITRE technique `{alert.technique.id} - {alert.technique.name}`."
                 )
         if incident_id:
-            incident = state.get_incident(incident_id)
+            incident = tenant_store.get_incident(tenant_id, incident_id, fl_client_ids=fl_client_ids)
             if incident:
                 citations.append(self._incident_citation(incident))
                 points.append(
@@ -308,7 +320,7 @@ class BastionBotEngine:
                     f"{len(incident.affected_devices)} affected device(s)."
                 )
         if device_id:
-            device = state.get_device(device_id)
+            device = tenant_store.get_device(tenant_id, device_id, fl_client_ids=fl_client_ids)
             if device:
                 citations.append(self._device_citation(device))
                 points.append(
@@ -317,7 +329,7 @@ class BastionBotEngine:
 
         lowered = query.lower()
         if any(token in lowered for token in ("dashboard", "kpi", "current threats", "open incidents")):
-            kpis = state.dashboard_kpis()
+            kpis = tenant_store.dashboard_kpis(tenant_id, fl_client_ids=fl_client_ids)
             citations.append(
                 SourceCitation(
                     id=f"src_live_kpi_{len(citations) + 1}",
@@ -337,7 +349,11 @@ class BastionBotEngine:
 
         if "critical alert" in lowered or "critical alerts" in lowered:
             critical_alerts = sorted(
-                [alert for alert in state.alerts if str(alert.severity) == "CRITICAL"],
+                [
+                    alert
+                    for alert in tenant_store.list_alerts(tenant_id, limit=200, fl_client_ids=fl_client_ids)[0]
+                    if str(alert.severity) == "CRITICAL"
+                ],
                 key=lambda alert: alert.timestamp,
                 reverse=True,
             )
@@ -350,7 +366,7 @@ class BastionBotEngine:
                     )
 
         if any(token in lowered for token in ("fl", "federated", "client participation", "model round")):
-            fl = state.fl_status_dict()
+            fl = tenant_store.fl_status_dict(tenant_id, fl_client_ids=fl_client_ids)
             citations.append(
                 SourceCitation(
                     id=f"src_live_fl_{len(citations) + 1}",
@@ -369,7 +385,9 @@ class BastionBotEngine:
             )
 
         if "audit" in lowered and ("verify" in lowered or "verif" in lowered or "chain" in lowered):
-            audit = state.verify_audit_chain()
+            audit = tenant_store.verify_audit_chain(
+                tenant_id, fl_client_ids=fl_client_ids, scope_firebase_uid=audit_scope_firebase_uid
+            )
             citations.append(
                 SourceCitation(
                     id=f"src_live_audit_{len(citations) + 1}",

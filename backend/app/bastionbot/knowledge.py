@@ -159,7 +159,7 @@ class KnowledgeRegistry:
                 "Alerts screen and triage flow",
                 "ui",
                 "frontend/app/alerts + frontend/components/alerts",
-                "The Alerts page uses GET /api/alerts and the /api/events SSE stream. Signed-in analysts can PATCH alert status and quarantine devices; guests can view but not mutate.",
+                "The Alerts page uses GET /api/alerts and the /api/events SSE stream. Signed-in analysts can PATCH alert status and quarantine devices; dev/demo read mode can view but not mutate.",
             ),
             (
                 "screen_fl_health",

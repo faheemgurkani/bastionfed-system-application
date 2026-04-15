@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { apiFetchJson, ApiError } from '@/lib/api';
 
 export default function AuditPage() {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode } = useAuth();
   const [verifyResult, setVerifyResult] = useState<string | null>(null);
   const [verifyBusy, setVerifyBusy] = useState(false);
 
@@ -18,15 +18,15 @@ export default function AuditPage() {
     setVerifyBusy(true);
     try {
       let data: { valid: boolean; totalLogs?: number; firstBreakAt?: string; checkedAt?: string };
-      if (isGuest) {
-        data = await apiFetchJson('/api/audit/verify', { guest: true });
+      if (isDevMode) {
+        data = await apiFetchJson('/api/audit/verify', { devMode: true });
       } else if (user) {
         const token = await user.getIdToken();
         data = await apiFetchJson('/api/audit/verify', {
           headers: { Authorization: `Bearer ${token}` },
         });
       } else {
-        setVerifyResult('Sign in or use guest mode.');
+        setVerifyResult('Sign in or use dev mode.');
         return;
       }
       setVerifyResult(

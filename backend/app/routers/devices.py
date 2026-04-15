@@ -4,31 +4,39 @@ import time
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.auth.deps import AuthContext, require_read_auth, require_user
+from app.auth.deps import AuthContext, require_read_auth, require_user, scoped_fl_client_ids
 from app.errors import api_error
 from app.models.api import QuarantineResponse
-from app.models.domain import AuditAction, Device, DeviceStatus
-from app.store.memory import state
+from app.models.domain import Device
+from app.store.tenant_store import tenant_store
 
 router = APIRouter(tags=["devices"])
 
 
 @router.get("/devices", response_model=dict)
 def list_devices(
-    _auth: Annotated[AuthContext, Depends(require_read_auth)],
+    auth: Annotated[AuthContext, Depends(require_read_auth)],
     wing: str | None = Query(None),
     status: str | None = Query(None, alias="status"),
     type: str | None = Query(None),
 ):
-    return {"items": state.list_devices(wing=wing, status=status, type=type)}
+    if not auth.tenant_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
+    return {
+        "items": tenant_store.list_devices(
+            auth.tenant_id, wing=wing, status=status, type=type, fl_client_ids=scoped_fl_client_ids(auth)
+        )
+    }
 
 
 @router.get("/devices/{device_id}", response_model=Device)
 def get_device(
     device_id: str,
-    _auth: Annotated[AuthContext, Depends(require_read_auth)],
+    auth: Annotated[AuthContext, Depends(require_read_auth)],
 ):
-    dev = state.get_device(device_id)
+    if not auth.tenant_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
+    dev = tenant_store.get_device(auth.tenant_id, device_id, fl_client_ids=scoped_fl_client_ids(auth))
     if not dev:
         raise api_error(status.HTTP_404_NOT_FOUND, "Device not found", "DEVICE_NOT_FOUND")
     return dev
@@ -39,22 +47,12 @@ def quarantine_device(
     device_id: str,
     auth: Annotated[AuthContext, Depends(require_user)],
 ):
-    dev = state.get_device(device_id)
-    if not dev:
+    if not auth.tenant_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
+    fl_scope = scoped_fl_client_ids(auth)
+    if tenant_store.get_device(auth.tenant_id, device_id, fl_client_ids=fl_scope) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "Device not found", "DEVICE_NOT_FOUND")
-    state.set_device_status(device_id, DeviceStatus.ISOLATED)
-    state.sync_alert_devices_for_device_id(device_id)
-    cmd_id = f"CMD-{int(time.time() * 1000)}"
-    sent_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    actor = auth.uid or "unknown"
-    state.append_audit(
-        actor=actor,
-        action=AuditAction.DEVICE_QUARANTINED,
-        target=device_id,
-        result=f"Isolation command {cmd_id} dispatched",
-    )
-    state.append_quarantine_to_open_incidents(
-        device_id,
-        f"Device {dev.name} quarantined ({device_id})",
-    )
-    return QuarantineResponse(device_id=device_id, status="ISOLATED", command_id=cmd_id, sent_at=sent_at)
+    result = tenant_store.quarantine_device(auth.tenant_id, device_id, auth.uid or "unknown")
+    if not result:
+        raise api_error(status.HTTP_404_NOT_FOUND, "Device not found", "DEVICE_NOT_FOUND")
+    return QuarantineResponse.model_validate(result)

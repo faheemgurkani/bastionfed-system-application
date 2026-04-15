@@ -4,6 +4,7 @@ import { Incident } from '@/lib/types';
 import { ArrowLeft, Search, Bell, Play, Lock, User, CheckCircle, Loader2, Circle, Download, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 
 interface IncidentDetailProps {
@@ -12,7 +13,8 @@ interface IncidentDetailProps {
 }
 
 export function IncidentDetail({ incident: initialIncident, onBack }: IncidentDetailProps) {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [incident, setIncident] = useState(initialIncident);
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -28,9 +30,9 @@ export function IncidentDetail({ incident: initialIncident, onBack }: IncidentDe
     async function load() {
       try {
         let data: Incident;
-        if (isGuest) {
+        if (isDevMode) {
           data = await apiFetchJson<Incident>(`/api/incidents/${encodeURIComponent(initialIncident.id)}`, {
-            guest: true,
+            devMode: true,
             signal: ac.signal,
           });
         } else if (user) {
@@ -54,7 +56,7 @@ export function IncidentDetail({ incident: initialIncident, onBack }: IncidentDe
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, initialIncident.id, isGuest, user]);
+  }, [authLoading, initialIncident.id, isDevMode, user, viewScopeKey]);
 
   const tabs = [
     { id: 'overview', label: 'Overview' },

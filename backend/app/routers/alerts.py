@@ -2,9 +2,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.auth.deps import AuthContext, require_read_auth, require_user
+from app.auth.deps import AuthContext, require_read_auth, require_user, scoped_fl_client_ids
 from app.errors import api_error
 from datetime import datetime, timezone
+import anyio
 
 from app.models.api import AlertListResponse, AlertPatchRequest, EscalateAlertResponse
 from app.models.domain import (
@@ -17,84 +18,15 @@ from app.models.domain import (
     IncidentStatus,
     Playbook,
 )
-from app.store.memory import state
+from app.store.tenant_store import tenant_store
+from app.sse_bus import publish_alert
 
 router = APIRouter(tags=["alerts"])
 
 
-@router.get("/alerts", response_model=AlertListResponse)
-def list_alerts(
-    _auth: Annotated[AuthContext, Depends(require_read_auth)],
-    limit: int = 50,
-    cursor: str | None = None,
-    severity: str | None = None,
-    tactic: str | None = None,
-    alert_status: str | None = Query(None, alias="status"),
-    date_from: str | None = Query(None, alias="from"),
-    date_to: str | None = Query(None, alias="to"),
-    sort: str = "timestamp_desc",
-):
-    items, next_cursor, total = state.list_alerts(
-        limit=min(limit, 200),
-        cursor=cursor,
-        severity=severity,
-        tactic=tactic,
-        status=alert_status,
-        date_from=date_from,
-        date_to=date_to,
-        sort=sort,
-    )
-    return AlertListResponse(items=items, next_cursor=next_cursor, total=total)
-
-
-@router.patch("/alerts/{alert_id}", response_model=Alert)
-def patch_alert(
-    alert_id: str,
-    body: AlertPatchRequest,
-    auth: Annotated[AuthContext, Depends(require_user)],
-):
-    try:
-        new_status = AlertStatus(body.status)
-    except ValueError:
-        raise api_error(status.HTTP_400_BAD_REQUEST, "Invalid status", "INVALID_STATUS")
-
-    updated = state.update_alert_status(alert_id, new_status)
-    if not updated:
-        raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")
-
-    actor = auth.uid or "unknown"
-    state.append_audit(
-        actor=actor,
-        action=AuditAction.RESPONSE_TRIGGERED,
-        target=alert_id,
-        result=f"Status changed to {new_status.value}",
-    )
-    return updated
-
-
-@router.get("/alerts/{alert_id}", response_model=Alert)
-def get_alert(
-    alert_id: str,
-    _auth: Annotated[AuthContext, Depends(require_read_auth)],
-):
-    a = state.get_alert(alert_id)
-    if not a:
-        raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")
-    return a
-
-
-@router.post("/alerts/{alert_id}/escalate", response_model=EscalateAlertResponse)
-def escalate_alert_to_incident(
-    alert_id: str,
-    auth: Annotated[AuthContext, Depends(require_user)],
-):
-    alert = state.get_alert(alert_id)
-    if not alert:
-        raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")
-
+def _build_incident_from_alert(alert: Alert) -> Incident:
     now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     inc_id = f"INC-{int(datetime.now(timezone.utc).timestamp() * 1000)}"
-
     sev_to_priority = {
         Severity.CRITICAL: "P1",
         Severity.HIGH: "P2",
@@ -102,8 +34,7 @@ def escalate_alert_to_incident(
         Severity.LOW: "P4",
     }
     priority = sev_to_priority.get(alert.severity, "P3")
-
-    incident = Incident(
+    return Incident(
         id=inc_id,
         title=f"Escalated Incident — {alert.type}",
         severity=alert.severity,
@@ -136,16 +67,83 @@ def escalate_alert_to_incident(
         labels=[alert.tactic],
     )
 
-    state.incidents.append(incident)
 
-    updated_alert = state.update_alert_status(alert.id, AlertStatus.IN_REVIEW)
-    if updated_alert:
-        actor = auth.uid or "unknown"
-        state.append_audit(
-            actor=actor,
-            action=AuditAction.RESPONSE_TRIGGERED,
-            target=alert.id,
-            result="Status changed to IN_REVIEW",
-        )
+@router.get("/alerts", response_model=AlertListResponse)
+def list_alerts(
+    auth: Annotated[AuthContext, Depends(require_read_auth)],
+    limit: int = 50,
+    cursor: str | None = None,
+    severity: str | None = None,
+    tactic: str | None = None,
+    alert_status: str | None = Query(None, alias="status"),
+    date_from: str | None = Query(None, alias="from"),
+    date_to: str | None = Query(None, alias="to"),
+    sort: str = "timestamp_desc",
+):
+    if not auth.tenant_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
+    fl_scope = scoped_fl_client_ids(auth)
+    items, next_cursor, total = tenant_store.list_alerts(
+        auth.tenant_id,
+        limit=min(limit, 200),
+        cursor=cursor,
+        severity=severity,
+        tactic=tactic,
+        status=alert_status,
+        date_from=date_from,
+        date_to=date_to,
+        sort=sort,
+        fl_client_ids=fl_scope,
+    )
+    return AlertListResponse(items=items, next_cursor=next_cursor, total=total)
 
+
+@router.patch("/alerts/{alert_id}", response_model=Alert)
+def patch_alert(
+    alert_id: str,
+    body: AlertPatchRequest,
+    auth: Annotated[AuthContext, Depends(require_user)],
+):
+    try:
+        new_status = AlertStatus(body.status)
+    except ValueError:
+        raise api_error(status.HTTP_400_BAD_REQUEST, "Invalid status", "INVALID_STATUS")
+
+    if not auth.tenant_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
+    fl_scope = scoped_fl_client_ids(auth)
+    if tenant_store.get_alert(auth.tenant_id, alert_id, fl_client_ids=fl_scope) is None:
+        raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")
+    updated = tenant_store.update_alert_status(auth.tenant_id, alert_id, new_status, auth.uid or "unknown")
+    if not updated:
+        raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")
+    anyio.from_thread.run(publish_alert, auth.tenant_id, updated.model_dump(by_alias=True, mode="json"))
+    return updated
+
+
+@router.get("/alerts/{alert_id}", response_model=Alert)
+def get_alert(
+    alert_id: str,
+    auth: Annotated[AuthContext, Depends(require_read_auth)],
+):
+    if not auth.tenant_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
+    a = tenant_store.get_alert(auth.tenant_id, alert_id, fl_client_ids=scoped_fl_client_ids(auth))
+    if not a:
+        raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")
+    return a
+
+
+@router.post("/alerts/{alert_id}/escalate", response_model=EscalateAlertResponse)
+def escalate_alert_to_incident(
+    alert_id: str,
+    auth: Annotated[AuthContext, Depends(require_user)],
+):
+    if not auth.tenant_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
+    incident = tenant_store.escalate_alert(
+        auth.tenant_id, alert_id, auth.uid or "unknown", fl_client_ids=scoped_fl_client_ids(auth)
+    )
+    if not incident:
+        raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")
     return EscalateAlertResponse(incident=incident)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 
@@ -33,6 +33,13 @@ class FLClientStatus(str, Enum):
     DEGRADED = "DEGRADED"
     OFFLINE = "OFFLINE"
     POISONING_SUSPECT = "POISONING_SUSPECT"
+
+
+class FLClientType(str, Enum):
+    """Device nodes are admin-scoped views only; person-operated clients use email invites + login."""
+
+    DEVICE = "DEVICE"
+    PERSON = "PERSON"
 
 
 class IncidentStatus(str, Enum):
@@ -73,6 +80,10 @@ class Device(CamelModel):
     criticality: int
     fl_client_id: str
     status: DeviceStatus
+    source_type: str | None = None
+    source_ref: str | None = None
+    ingested_at: str | None = None
+    is_demo: bool = False
 
 
 class MitreAttackTechnique(CamelModel):
@@ -102,6 +113,10 @@ class Alert(CamelModel):
     threat_intel: list[ThreatIntelIndicator]
     cve_reference: str | None = None
     feature_summary: str
+    source_type: str | None = None
+    source_ref: str | None = None
+    ingested_at: str | None = None
+    is_demo: bool = False
 
 
 class FLRound(CamelModel):
@@ -120,6 +135,12 @@ class FLClient(CamelModel):
     dp_epsilon: float
     model_version: str
     status: FLClientStatus
+    client_type: FLClientType = FLClientType.DEVICE
+    node_name: str | None = None
+    created_by_firebase_uid: str | None = Field(
+        default=None,
+        description="Firebase UID of the admin who provisioned this client.",
+    )
 
 
 class PlaybookStep(CamelModel):
@@ -171,6 +192,10 @@ class Incident(CamelModel):
     priority: str
     created: str
     labels: list[str]
+    source_type: str | None = None
+    source_ref: str | None = None
+    ingested_at: str | None = None
+    is_demo: bool = False
 
 
 class StaticAnalysis(CamelModel):
@@ -201,8 +226,16 @@ class MalwareSample(CamelModel):
     upload_time: str
     family: str
     threat_score: int
-    status: Literal["COMPLETED", "IN_PROGRESS", "PENDING", "ANALYZED", "ANALYZING"]
+    status: Literal["COMPLETED", "IN_PROGRESS", "PENDING", "ANALYZED", "ANALYZING", "UPLOADED", "QUEUED", "SCANNED", "QUARANTINED", "RELEASED", "EXPIRED"]
     analysis: SampleAnalysis
+    # Supabase Storage object path inside bucket (e.g. forensics/…), when uploaded
+    storage_path: str | None = None
+    scan_status: Literal["NOT_SCANNED", "QUEUED", "SCANNED", "FAILED"] = "NOT_SCANNED"
+    quarantine_status: Literal["NONE", "QUARANTINED", "RELEASED"] = "NONE"
+    retention_status: Literal["ACTIVE", "LEGAL_HOLD", "EXPIRED"] = "ACTIVE"
+    chain_of_custody: list[dict[str, str]] = []
+    scanner_verdict: dict[str, str | int | float | bool | None] | None = None
+    is_demo: bool = False
 
 
 class TimelineNode(CamelModel):
@@ -236,6 +269,29 @@ class AuditLog(CamelModel):
     target: str
     result: str
     hash: str
+    target_type: str | None = None
+    metadata: dict[str, object] | None = None
+
+
+class IngestSource(CamelModel):
+    id: str
+    tenant_id: str
+    name: str
+    source_type: str
+    connector_kind: str
+    secret_last_rotated_at: str
+    created_at: str
+    updated_at: str
+
+
+class IngestEventResult(CamelModel):
+    event_id: str
+    tenant_id: str
+    source_id: str
+    external_id: str
+    parse_status: Literal["ACCEPTED", "DUPLICATE", "REJECTED"]
+    normalized_targets: list[dict[str, str]]
+    received_at: str
 
 
 class UserRecord(BaseModel):
@@ -282,3 +338,5 @@ class FLClientPatch(CamelModel):
     participation_pct: float | None = None
     last_round: int | None = None
     status: FLClientStatus | None = None
+    client_type: FLClientType | None = None
+    node_name: str | None = None

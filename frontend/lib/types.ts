@@ -1,6 +1,7 @@
 export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 export type AlertStatus = 'OPEN' | 'IN_REVIEW' | 'RESOLVED' | 'FALSE_POSITIVE';
 export type FLClientStatus = 'ACTIVE' | 'DEGRADED' | 'OFFLINE' | 'POISONING_SUSPECT';
+export type FLClientType = 'DEVICE' | 'PERSON';
 export type IncidentStatus = 'NEW' | 'TRIAGING' | 'RESPONDING' | 'RESOLVED' | 'POST_MORTEM';
 export type PlaybookStepStatus = 'COMPLETED' | 'RUNNING' | 'PENDING';
 
@@ -13,6 +14,10 @@ export interface Device {
   criticality: number; // 1-5
   flClientId: string;
   status: 'NORMAL' | 'SUSPICIOUS' | 'COMPROMISED' | 'ISOLATED';
+  sourceType?: string | null;
+  sourceRef?: string | null;
+  ingestedAt?: string | null;
+  isDemo?: boolean;
 }
 
 export interface MitreAttackTechnique {
@@ -42,6 +47,10 @@ export interface Alert {
   threatIntel: ThreatIntelIndicator[];
   cveReference?: string | undefined;
   featureSummary: string;
+  sourceType?: string | null;
+  sourceRef?: string | null;
+  ingestedAt?: string | null;
+  isDemo?: boolean;
 }
 
 export interface FLRound {
@@ -60,6 +69,9 @@ export interface FLClient {
   dpEpsilon: number;
   modelVersion: string;
   status: FLClientStatus;
+  clientType?: FLClientType;
+  nodeName?: string | null;
+  createdByFirebaseUid?: string | null;
 }
 
 export interface IncidentEvent {
@@ -104,6 +116,10 @@ export interface Incident {
   priority: string;
   created: string;
   labels: string[];
+  sourceType?: string | null;
+  sourceRef?: string | null;
+  ingestedAt?: string | null;
+  isDemo?: boolean;
 }
 
 export interface MalwareSample {
@@ -118,7 +134,7 @@ export interface MalwareSample {
   uploadTime: string;
   family: string;
   threatScore: number;
-  status: 'COMPLETED' | 'IN_PROGRESS' | 'PENDING' | 'ANALYZED' | 'ANALYZING';
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'PENDING' | 'ANALYZED' | 'ANALYZING' | 'UPLOADED' | 'QUEUED' | 'SCANNED' | 'QUARANTINED' | 'RELEASED' | 'EXPIRED';
   analysis: {
     static: {
       imports: string[];
@@ -130,6 +146,13 @@ export interface MalwareSample {
       processes: string[];
     };
   };
+  storagePath?: string | null;
+  scanStatus?: 'NOT_SCANNED' | 'QUEUED' | 'SCANNED' | 'FAILED';
+  quarantineStatus?: 'NONE' | 'QUARANTINED' | 'RELEASED';
+  retentionStatus?: 'ACTIVE' | 'LEGAL_HOLD' | 'EXPIRED';
+  chainOfCustody?: Array<{ timestamp: string; actor: string; action: string; detail: string }>;
+  scannerVerdict?: Record<string, string | number | boolean | null> | null;
+  isDemo?: boolean;
 }
 
 export interface RCAReport {
@@ -152,6 +175,8 @@ export interface AuditLog {
   target: string;
   result: string;
   hash: string;
+  targetType?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface SourceCitation {

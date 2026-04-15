@@ -6,10 +6,20 @@ Track responsibilities and workstreams by member. Update this file as scope shif
 
 ## Faheem
 
-- Work on the **design, layout, and functionality** of the dashboard.
-- **Endpoint ownership**: tasks assigned to Faheem should include implementing or integrating those endpoints, and **verifying them** with **pytest** as well as **manual** checks where appropriate.
-- **Cross-team API dependencies:** Dashboard/incidents/FL/audit UI paths that Faheem wired often call **Hunain**- or **Hammad**-owned routes as well. See **`docs/FAHEEM/FAHEEM_BACKEND_TODO.md` §2** for which screens need which owner, why, and contract expectations for a merged FastAPI service.
-- **BastionBot**: evolve it toward an **agentic** assistant in the spirit of tools like Cursor, but **grounded in the bastionfed-system-application** codebase and product context (SOC / IoMT / platform workflows).
+**Done (baseline shipped / documented)**
+
+- [x] Dashboard **design, layout, and functionality**.
+- [x] **Endpoint ownership**: implement or integrate assigned routes; verify with **pytest** and **manual** checks where appropriate.
+- [x] **Cross-team API dependencies:** wired UI paths and **`docs/FAHEEM/FAHEEM_BACKEND_TODO.md` §2** contract notes for merged FastAPI.
+- [x] **BastionBot** direction: agentic assistant grounded in this repo and SOC / IoMT / platform context (ongoing evolution as product matures).
+
+**Next**
+
+- [ ] **Data plane:** Establish DB artifacts and app connection per **`docs/FIREBASE_DATA_PLANE_MAPPING.md`**.
+- [ ] **FL orchestration state:** Monitor and understand the shortcomings of the fl orchestrations here. 
+- [ ] **Feature catelog:** Address the shortcomings of the feature catalog and come to the reality, as per **`docs/BLUE_TEAM_APPLICATION_SPEC.md`**.
+- [ ] **Auth:** Decide whether to keep the current stub or move to real token verification, then implement accordingly.
+- [ ] **Cursor white paper:** Read/research the new Cursor paper; assess implementability and fit for integration with BastionFed.
 
 ---
 

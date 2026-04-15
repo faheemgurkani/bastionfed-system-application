@@ -338,7 +338,7 @@ class AppState:
             )
         return {"entries": entries}
 
-    def fl_models_dict(self) -> dict[str, Any]:
+    def fl_models_dict(self, **kwargs: Any) -> dict[str, Any]:
         active = self.active_model_name
         models = [
             {
@@ -431,6 +431,17 @@ class AppState:
         sid = f"MAL-{n + 1:03d}"
         family = notes or "Uploaded Sample"
 
+        storage_path: str | None = None
+        try:
+            from app.services.supabase_storage import upload_forensics_bytes
+
+            storage_path = upload_forensics_bytes(
+                data=data,
+                object_name=f"{sha256[:24]}_{getattr(file, 'filename', 'upload.bin')}",
+            )
+        except Exception:
+            storage_path = None
+
         sample = MalwareSample(
             id=sid,
             sha256=sha256,
@@ -448,6 +459,7 @@ class AppState:
                 static=StaticAnalysis(imports=[], strings=[]),
                 dynamic=DynamicAnalysis(network=[], file_system=[], processes=[]),
             ),
+            storage_path=storage_path,
         )
         self.malware_samples.append(sample)
         return sample
@@ -988,6 +1000,57 @@ class AppState:
             },
             deep=True,
         )
+
+
+def set_audit_counter(value: int) -> None:
+    global AUDIT_COUNTER
+    AUDIT_COUNTER = max(2000, int(value))
+
+
+def export_app_snapshot(st: AppState) -> dict[str, Any]:
+    """Serialize full volatile product state for Postgres bf_bundle."""
+    return {
+        "version": 1,
+        "audit_counter": AUDIT_COUNTER,
+        "devices": [d.model_dump(mode="json") for d in st.devices],
+        "alerts": [a.model_dump(mode="json") for a in st.alerts],
+        "incidents": [i.model_dump(mode="json") for i in st.incidents],
+        "fl_rounds": [r.model_dump(mode="json") for r in st.fl_rounds],
+        "fl_clients": [c.model_dump(mode="json") for c in st.fl_clients],
+        "malware_samples": [m.model_dump(mode="json") for m in st.malware_samples],
+        "rca_reports": [r.model_dump(mode="json") for r in st.rca_reports],
+        "audit_logs": [l.model_dump(mode="json") for l in st.audit_logs],
+        "users": {k: v.model_dump(mode="json") for k, v in st.users.items()},
+        "conversations": [c.model_dump(mode="json") for c in st.conversations],
+        "conversation_messages": {
+            k: [m.model_dump(mode="json") for m in v] for k, v in st.conversation_messages.items()
+        },
+        "active_model_name": st.active_model_name,
+        "model_zoo_names": sorted(st.model_zoo_names),
+        "fl_session_id": st.fl_session_id,
+    }
+
+
+def import_app_snapshot(st: AppState, data: dict[str, Any]) -> None:
+    """Restore AppState from bf_bundle JSON."""
+    set_audit_counter(int(data.get("audit_counter", 2000)))
+    st.devices = [Device.model_validate(x) for x in data.get("devices", [])]
+    st.alerts = [Alert.model_validate(x) for x in data.get("alerts", [])]
+    st.incidents = [Incident.model_validate(x) for x in data.get("incidents", [])]
+    st.fl_rounds = [FLRound.model_validate(x) for x in data.get("fl_rounds", [])]
+    st.fl_clients = [FLClient.model_validate(x) for x in data.get("fl_clients", [])]
+    st.malware_samples = [MalwareSample.model_validate(x) for x in data.get("malware_samples", [])]
+    st.rca_reports = [RCAReport.model_validate(x) for x in data.get("rca_reports", [])]
+    st.audit_logs = [AuditLog.model_validate(x) for x in data.get("audit_logs", [])]
+    st.users = {k: UserRecord.model_validate(v) for k, v in data.get("users", {}).items()}
+    st.conversations = [ConversationSummary.model_validate(x) for x in data.get("conversations", [])]
+    raw_msgs = data.get("conversation_messages") or {}
+    st.conversation_messages = {
+        k: [BotMessage.model_validate(m) for m in v] for k, v in raw_msgs.items()
+    }
+    st.active_model_name = str(data.get("active_model_name", "v4.2.1-DNN"))
+    st.model_zoo_names = set(data.get("model_zoo_names") or ["v4.2.1-DNN", "v4.1.0-GNN", "v4.0.5-HYB"])
+    st.fl_session_id = str(data.get("fl_session_id", "sess_2025_06_01"))
 
 
 state = AppState()

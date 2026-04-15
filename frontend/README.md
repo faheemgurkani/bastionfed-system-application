@@ -25,3 +25,8 @@ The `/bastionbot` page now uses the backend API instead of calling Gemini direct
 - requires Google sign-in
 - uses per-user conversation history and memory
 - shows grounded source citations in the UI
+
+## Production vs dev mode
+
+- **Dev mode** on the home page (`Continue in dev mode`) only works when the backend has `DEMO_MODE=1`. It uses the read-only **demo tenant** — no real customer data, no BastionBot mutations.
+- **Production sign-in** (Google or Firebase email/password) uses your configured Firebase project and real tenant data. Enable **Email/Password** in the Firebase console for invited client users.

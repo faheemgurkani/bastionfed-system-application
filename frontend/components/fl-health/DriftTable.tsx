@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 import { apiFetchJson, ApiError } from '@/lib/api';
 
 type DriftRow = {
@@ -16,6 +17,8 @@ type DriftRow = {
 type DriftReport = {
   available: boolean;
   message?: string;
+  operatorUse?: string;
+  scope?: string;
   driftScores: DriftRow[];
   overallDrift: number;
   overallStatus: string;
@@ -38,6 +41,8 @@ type ClientDriftEntry = {
 
 type ClientDriftReport = {
   available: boolean;
+  scope?: string;
+  message?: string;
   clients: ClientDriftEntry[];
   checkedAt: string;
 };
@@ -46,11 +51,14 @@ const STATUS_STYLES: Record<string, string> = {
   STABLE:         'text-green-400',
   MONITORING:     'text-yellow-400',
   DRIFT_DETECTED: 'text-red-400 font-bold',
+  DEMO_RESEARCH:  'text-yellow-300 font-bold',
+  DEMO:           'text-yellow-300',
   'N/A':          'text-muted-foreground',
 };
 
 export function DriftTable() {
-  const { user, isGuest } = useAuth();
+  const { user, isDevMode } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [report, setReport] = useState<DriftReport | null>(null);
   const [clientDrift, setClientDrift] = useState<ClientDriftReport | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +66,8 @@ export function DriftTable() {
 
   async function fetchDrift() {
     try {
-      const opts = isGuest
-        ? { guest: true }
+      const opts = isDevMode
+        ? { devMode: true }
         : { headers: { Authorization: `Bearer ${await user!.getIdToken()}` } };
       const [globalData, clientData] = await Promise.all([
         apiFetchJson<DriftReport>('/api/fl/drift', opts),
@@ -74,11 +82,11 @@ export function DriftTable() {
   }
 
   useEffect(() => {
-    if (!user && !isGuest) return;
+    if (!user && !isDevMode) return;
     void fetchDrift();
     const id = setInterval(fetchDrift, 15000);
     return () => clearInterval(id);
-  }, [user, isGuest]);
+  }, [user, isDevMode, viewScopeKey]);
 
   if (error) {
     return (
@@ -118,6 +126,12 @@ export function DriftTable() {
       <p className="font-mono text-[10px] text-muted-foreground mb-3">
         {report.samplesAnalyzed} samples analyzed · {report.nReferenceImages.toLocaleString()} reference images
       </p>
+      {(report.scope || report.operatorUse) && (
+        <p className="font-mono text-[10px] text-yellow-300/90 mb-3">
+          {report.scope === 'DEMO_RESEARCH' ? 'Research/demo scope.' : ''}
+          {report.operatorUse ? ` ${report.operatorUse}` : ''}
+        </p>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-border-default mb-3">
@@ -174,6 +188,9 @@ export function DriftTable() {
 
         {tab === 'clients' && clientDrift?.available && (
           <div className="flex flex-col gap-3">
+            {clientDrift.message && (
+              <p className="font-mono text-[10px] text-yellow-300/90">{clientDrift.message}</p>
+            )}
             {clientDrift.clients.map((c) => (
               <div key={c.clientId} className="border border-border-default rounded-md p-3">
                 <div className="flex items-center justify-between mb-2">

@@ -29,11 +29,11 @@ def test_openapi_contains_hammad_paths_in_unified_backend(client: TestClient):
 
 
 def test_hammad_get_endpoints_work_in_unified_backend(client: TestClient, auth_headers: dict[str, str]):
-    assert client.get("/api/devices?guest=true").status_code == 200
-    assert client.get("/api/devices/dev-01?guest=true").status_code == 200
-    assert client.get("/api/fl/drift?guest=true").status_code == 200
-    assert client.get("/api/fl/models?guest=true").status_code == 200
-    assert client.get("/api/forensics/rca?guest=true").status_code == 200
+    assert client.get("/api/devices?dev=true").status_code == 200
+    assert client.get("/api/devices/dev-01?dev=true").status_code == 200
+    assert client.get("/api/fl/drift?dev=true").status_code == 200
+    assert client.get("/api/fl/models?dev=true").status_code == 200
+    assert client.get("/api/forensics/rca?dev=true").status_code == 200
 
     history = client.get("/api/bastionbot/conversations/conv-does-not-exist", headers=auth_headers)
     assert history.status_code == 404
@@ -42,7 +42,7 @@ def test_hammad_get_endpoints_work_in_unified_backend(client: TestClient, auth_h
 
 def test_hammad_mutations_require_user_auth_in_unified_backend(client: TestClient, auth_headers: dict[str, str]):
     r = client.patch(
-        "/api/incidents/INC-001?guest=true",
+        "/api/incidents/INC-001?dev=true",
         json={"status": "RESPONDING", "assignee": "JP", "notes": "test"},
     )
     assert r.status_code == 403
@@ -103,7 +103,7 @@ def test_forensics_upload_sample_in_unified_backend(client: TestClient, auth_hea
     assert r.status_code == 201
     j = r.json()
     assert j["sha256"]
-    assert j["status"] in ("PENDING", "ANALYZING", "ANALYZED")
+    assert j["status"] in ("PENDING", "ANALYZING", "ANALYZED", "QUEUED")
     assert j["uploadTime"]
 
 
@@ -133,30 +133,33 @@ def test_block_ip_in_unified_backend(client: TestClient, auth_headers: dict[str,
 
 
 def test_devices_filters_in_unified_backend(client: TestClient):
-    by_wing = client.get("/api/devices?guest=true&wing=ICU")
+    by_wing = client.get("/api/devices?dev=true&wing=ICU")
     assert by_wing.status_code == 200
     assert by_wing.json()["items"]
     assert all(d["wing"] == "ICU" for d in by_wing.json()["items"])
 
-    by_status = client.get("/api/devices?guest=true&status=NORMAL")
+    by_status = client.get("/api/devices?dev=true&status=NORMAL")
     assert by_status.status_code == 200
     assert all(d["status"] == "NORMAL" for d in by_status.json()["items"])
 
-    by_type = client.get("/api/devices?guest=true&type=MRI")
+    by_type = client.get("/api/devices?dev=true&type=MRI")
     assert by_type.status_code == 200
     assert all(d["type"] == "MRI" for d in by_type.json()["items"])
 
 
 def test_fl_drift_and_models_shape_in_unified_backend(client: TestClient):
-    drift = client.get("/api/fl/drift?guest=true")
+    drift = client.get("/api/fl/drift?dev=true")
     assert drift.status_code == 200
-    entries = drift.json()["entries"]
+    body = drift.json()
+    assert body.get("driftMethod") == "ROUND_ACCURACY_HEURISTIC"
+    assert "driftMethodDescription" in body and body["documentationRef"]
+    entries = body["entries"]
     assert isinstance(entries, list)
     assert entries
     for key in ("clientId", "department", "roundsAgo", "driftScore", "baselineAccuracy", "currentAccuracy", "flagged"):
         assert key in entries[0]
 
-    models = client.get("/api/fl/models?guest=true")
+    models = client.get("/api/fl/models?dev=true")
     assert models.status_code == 200
     active = [m for m in models.json()["models"] if m["active"]]
     assert len(active) == 1

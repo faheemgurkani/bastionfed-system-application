@@ -72,7 +72,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 Optional BastionBot persistence override:
 
 ```env
-BASTIONBOT_DB_PATH=data/bastionbot.sqlite3
+BASTIONBOT_DB_PATH=data/runtime/bastionbot.sqlite3
 ```
 
 Optional BastionBot Groq configuration is loaded from `backend/.env`:

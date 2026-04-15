@@ -1,6 +1,4 @@
 'use client';
-
-import Link from 'next/link';
 import { Bot, ChevronDown, Link2, User } from 'lucide-react';
 import Markdown from 'react-markdown';
 import type { BotMessage } from '@/lib/types';
@@ -112,14 +110,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           {isBot && actions.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2 border-t border-border-default/70 pt-3">
               {actions.map((action) => (
-                <Link
+                <a
                   key={action.href}
                   href={action.href}
                   className="inline-flex max-w-full items-center gap-2 rounded-md border border-border-strong bg-bg-base px-3 py-2 text-xs font-medium text-white transition-colors hover:border-white hover:bg-bg-surface"
                 >
                   <Link2 className="h-3.5 w-3.5" />
                   <span className="truncate">{action.label}</span>
-                </Link>
+                </a>
               ))}
             </div>
           )}

@@ -21,6 +21,12 @@ Thumbs.db
 .idea/
 .vscode/settings.json
 
+# ── Python ───────────────────────────────────────────────────────────────────
+backend/.venv/
+
+# ── Local / runtime data (models, samples, SQLite, etc.) ──────────────────────
+backend/data/
+
 # ── Misc ──────────────────────────────────────────────────────────────────────
 *.log
 .turbo/

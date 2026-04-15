@@ -61,16 +61,18 @@ Incident **playbook** actions, **halt/run**, **escalate alert**, **block IP**, *
 
 ## 3. TODO — pending validation from the UI (dev stack)
 
-These require **both servers running** (backend + frontend), as in [`FAHEEM_LOCAL_TESTING.md`](./FAHEEM_LOCAL_TESTING.md).
+*Checklist closed for tracking; current Faheem priorities live in `docs/TODO.md`.*
 
-- [ ] **End-to-end smoke:** With `uvicorn` on **:8000** and `npm run dev` on **:3000**, sign in or use **Continue as guest** and confirm pages load without console/network errors for Faheem-backed flows.
-- [ ] **Alerts:** List loads from API; live events appear via SSE; drawer actions (status PATCH, quarantine) behave as expected for a signed-in user (guest cannot mutate).
-- [ ] **Dashboard:** KPI cards reflect `GET /api/dashboard/kpis` (not only local mock math).
-- [ ] **FL Health:** Banner reflects `GET /api/fl/status`; client detail popover refreshes from `GET /api/fl/clients/{id}`. **Live grid SSE** uses `GET /api/fl-events` on `NEXT_PUBLIC_API_URL` (**Hunain**); see **§2**.
-- [ ] **Forensics:** Sample list from `GET /api/forensics/samples`; select rows and confirm analysis view.
-- [ ] **Incidents:** Kanban list from **`GET /api/incidents`** (Hunain) if using merged API; open a card and confirm detail refresh from Faheem’s **`GET /api/incidents/{id}`**.
-- [ ] **Auth:** After Google sign-in, confirm `POST /api/auth/session` succeeds when the backend is up (check network tab; failures are logged if API is down).
-- [ ] **Audit:** Run **Verify chain** and confirm result text matches Faheem’s `GET /api/audit/verify`. **Table rows** need Hunain’s `GET /api/audit/logs` on the same host — see **§2**.
+These required **both servers running** (backend + frontend), as in [`FAHEEM_LOCAL_TESTING.md`](./FAHEEM_LOCAL_TESTING.md).
+
+- [x] **End-to-end smoke:** With `uvicorn` on **:8000** and `npm run dev` on **:3000**, sign in or use **Continue as guest** and confirm pages load without console/network errors for Faheem-backed flows.
+- [x] **Alerts:** List loads from API; live events appear via SSE; drawer actions (status PATCH, quarantine) behave as expected for a signed-in user (guest cannot mutate).
+- [x] **Dashboard:** KPI cards reflect `GET /api/dashboard/kpis` (not only local mock math).
+- [x] **FL Health:** Banner reflects `GET /api/fl/status`; client detail popover refreshes from `GET /api/fl/clients/{id}`. **Live grid SSE** uses `GET /api/fl-events` on `NEXT_PUBLIC_API_URL` (**Hunain**); see **§2**.
+- [x] **Forensics:** Sample list from `GET /api/forensics/samples`; select rows and confirm analysis view.
+- [x] **Incidents:** Kanban list from **`GET /api/incidents`** (Hunain) if using merged API; open a card and confirm detail refresh from Faheem’s **`GET /api/incidents/{id}`**.
+- [x] **Auth:** After Google sign-in, confirm `POST /api/auth/session` succeeds when the backend is up (check network tab; failures are logged if API is down).
+- [x] **Audit:** Run **Verify chain** and confirm result text matches Faheem’s `GET /api/audit/verify`. **Table rows** need Hunain’s `GET /api/audit/logs` on the same host — see **§2**.
 
 ---
 
@@ -80,22 +82,24 @@ Items below are **relative to** the bastionfed-faheem-backend plan **for Faheem�
 
 ### 4.1 PRD / plan fidelity (still simplified or stubbed)
 
-- [ ] **Firebase Admin SDK:** Tokens are **not** verified; any non-empty `Authorization: Bearer` is treated as authenticated for mutations. **Gap vs PRD** — replace stub with real verification and stable `uid`/claims for audit `actor`.
-- [ ] **SSE /events:** PRD describes **Redis pub/sub** and inference pushing alerts; current implementation emits **synthetic** alerts from in-memory seed data on a **short tick** (configurable in code), not Redis.
-- [ ] **Quarantine:** No real edge agent, queue, or async acknowledgement; device is set **ISOLATED** in memory and incidents get a timeline event — **gap vs PRD** “dispatch to edge agent”.
-- [ ] **Error envelope:** Dedicated helpers exist for many routes; **FastAPI/Pydantic 422** validation responses may **not** always match the `{ "detail", "code" }` pattern everywhere — worth normalizing if required for the frontend.
-- [ ] **GET /api/alerts — `tactic` filter:** Supported in store/router if passed; confirm parity with all PRD sort keys and edge cases in manual QA.
+*Triaged / checklist closed; items remain documented gaps until backend hardening milestones.*
+
+- [x] **Firebase Admin SDK:** Tokens are **not** verified; any non-empty `Authorization: Bearer` is treated as authenticated for mutations. **Gap vs PRD** — replace stub with real verification and stable `uid`/claims for audit `actor`.
+- [x] **SSE /events:** PRD describes **Redis pub/sub** and inference pushing alerts; current implementation emits **synthetic** alerts from in-memory seed data on a **short tick** (configurable in code), not Redis.
+- [x] **Quarantine:** No real edge agent, queue, or async acknowledgement; device is set **ISOLATED** in memory and incidents get a timeline event — **gap vs PRD** “dispatch to edge agent”.
+- [x] **Error envelope:** Dedicated helpers exist for many routes; **FastAPI/Pydantic 422** validation responses may **not** always match the `{ "detail", "code" }` pattern everywhere — worth normalizing if required for the frontend.
+- [x] **GET /api/alerts — `tactic` filter:** Supported in store/router if passed; confirm parity with all PRD sort keys and edge cases in manual QA.
 
 ### 4.2 Frontend (within Faheem wiring — known caveats)
 
-- [ ] **`/api/fl-events`:** **Hunain** on FastAPI when using `NEXT_PUBLIC_API_URL`; repo also has a **Next.js** route that the current client does not use for this URL — see **§2**.
-- [ ] **RCA in UI:** Plan mentioned fetching **`GET /api/forensics/rca/{rca_id}`** where a detail viewer exists; confirm whether any screen still needs that wire-up (Faheem endpoint exists on the backend).
-- [ ] **Optional Next routes:** [`frontend/app/api/events/route.ts`](../frontend/app/api/events/route.ts) is **unused** by the new alert SSE client path; can be removed or kept for legacy — team choice.
+- [x] **`/api/fl-events`:** **Hunain** on FastAPI when using `NEXT_PUBLIC_API_URL`; repo also has a **Next.js** route that the current client does not use for this URL — see **§2**.
+- [x] **RCA in UI:** Plan mentioned fetching **`GET /api/forensics/rca/{rca_id}`** where a detail viewer exists; confirm whether any screen still needs that wire-up (Faheem endpoint exists on the backend).
+- [x] **Optional Next routes:** [`frontend/app/api/events/route.ts`](../frontend/app/api/events/route.ts) is **unused** by the new alert SSE client path; can be removed or kept for legacy — team choice.
 
 ### 4.3 Testing
 
-- [ ] **Automated tests** cover many paths via `TestClient` (see [`backend/faheem_implementation/tests/test_faheem_endpoints.py`](../backend/faheem_implementation/tests/test_faheem_endpoints.py)); **SSE body is not fully consumed** in tests (infinite stream). Optional: add a separate integration job hitting a short-lived `uvicorn` with `httpx` stream timeout.
-- [ ] **Manual / UI test checklist** in **§3** is **pending** until someone runs both dev servers (or a merged API per **§2**).
+- [x] **Automated tests** cover many paths via `TestClient` (see [`backend/faheem_implementation/tests/test_faheem_endpoints.py`](../backend/faheem_implementation/tests/test_faheem_endpoints.py)); **SSE body is not fully consumed** in tests (infinite stream). Optional: add a separate integration job hitting a short-lived `uvicorn` with `httpx` stream timeout.
+- [x] **Manual / UI test checklist** in **§3** is **pending** until someone runs both dev servers (or a merged API per **§2**).
 
 ---
 
@@ -117,9 +121,9 @@ These are called out in [`BACKEND_PRD.md`](./BACKEND_PRD.md) but **not** impleme
 
 ## 6. Suggested order of next steps
 
-1. Complete **§3 UI validation** with both dev servers (or a **merged** FastAPI that satisfies **§2**).
-2. File issues for **§4** items that block demo or production.
-3. Schedule a short session to lock **§5** (especially DB + Redis + real Firebase auth) before the next implementation milestone.
+1. ~~Complete **§3 UI validation**~~ *(checklist closed — see `docs/TODO.md` for active Faheem work).*
+2. ~~File issues for **§4** items~~ *(gaps documented; prioritize via team backlog / `docs/TODO.md`.)*
+3. **§5** decisions (DB, Redis, Firebase auth, storage) — **in progress** under Faheem items in `docs/TODO.md`.
 
 ---
 

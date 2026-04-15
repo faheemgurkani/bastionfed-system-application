@@ -4,9 +4,22 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useActiveRoute } from '@/hooks/use-active-route';
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
-import { Map, Bell, Activity, Shield, Search, FileText, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import {
+  Map,
+  Bell,
+  Activity,
+  Shield,
+  Search,
+  FileText,
+  MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  UserCog,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useActiveIncidentsCount } from '@/hooks/use-active-incidents-count';
 
 function useUptime() {
   const [seconds, setSeconds] = useState(0);
@@ -30,16 +43,17 @@ function getInitials(name: string | null | undefined): string {
   return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
 }
 
-function getUserId(uid: string | undefined, isGuest: boolean): string {
-  if (isGuest) return 'GUEST';
+function getUserId(uid: string | undefined, isDevMode: boolean): string {
+  if (isDevMode) return 'DEV';
   if (!uid) return '—';
   return uid.substring(0, 8).toUpperCase();
 }
 
 function useSidebarStats() {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode, sessionReady } = useAuth();
+  const { viewScopeKey } = useViewMode();
+  const activeMissions = useActiveIncidentsCount();
   const [currentRound, setCurrentRound] = useState(0);
-  const [activeMissions, setActiveMissions] = useState(0);
 
   useEffect(() => {
     if (authLoading) return;
@@ -47,23 +61,19 @@ function useSidebarStats() {
     const ac = new AbortController();
 
     async function load() {
-      const opts = isGuest
-        ? { guest: true as const, signal: ac.signal }
-        : user
-        ? { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, signal: ac.signal }
-        : null;
+      const opts = isDevMode
+        ? { devMode: true as const, signal: ac.signal }
+        : user && sessionReady
+          ? { headers: { Authorization: `Bearer ${await user.getIdToken()}` }, signal: ac.signal }
+          : null;
       if (!opts) return;
       try {
-        const [status, incidents] = await Promise.all([
-          apiFetchJson<{ currentRound: number; activeClients: number }>('/api/fl/status', opts),
-          apiFetchJson<{ items: { status: string }[]; total: number }>('/api/incidents', opts),
-        ]);
+        const status = await apiFetchJson<{ currentRound: number; activeClients: number }>(
+          '/api/fl/status',
+          opts,
+        );
         if (!cancelled) {
           setCurrentRound(status.currentRound);
-          const ongoing = incidents.items.filter(
-            (i) => i.status !== 'RESOLVED' && i.status !== 'POST_MORTEM',
-          ).length;
-          setActiveMissions(ongoing);
         }
       } catch (e) {
         if (isAbortError(e)) return;
@@ -76,7 +86,7 @@ function useSidebarStats() {
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, sessionReady, user, viewScopeKey]);
 
   return { currentRound, activeMissions };
 }
@@ -89,14 +99,17 @@ export function Sidebar({
   onToggleCollapsed: () => void;
 }) {
   const activeRoute = useActiveRoute();
-  const { user, isGuest } = useAuth();
-  const signedInUser = !isGuest ? user : null;
+  const { user, isDevMode, role } = useAuth();
+  const { canUseAdminClientView, mode: adminViewMode } = useViewMode();
+  const signedInUser = !isDevMode ? user : null;
   const uptime = useUptime();
   const { currentRound, activeMissions } = useSidebarStats();
 
-  const displayName = isGuest ? 'Guest' : (signedInUser?.displayName ?? signedInUser?.email ?? 'Unknown');
-  const initials = isGuest ? 'G' : getInitials(signedInUser?.displayName ?? signedInUser?.email);
-  const userId = getUserId(signedInUser?.uid, isGuest);
+  const displayName = isDevMode ? 'Dev mode' : (signedInUser?.displayName ?? signedInUser?.email ?? 'Unknown');
+  const initials = isDevMode ? 'DV' : getInitials(signedInUser?.displayName ?? signedInUser?.email);
+  const userId = getUserId(signedInUser?.uid, isDevMode);
+
+  const isClientUser = role === 'client_user';
 
   const navItems = [
     { href: '/dashboard', icon: Map, label: 'Threat Map' },
@@ -104,8 +117,12 @@ export function Sidebar({
     { href: '/fl-health', icon: Activity, label: 'FL Monitor' },
     { href: '/incidents', icon: Shield, label: 'Incidents' },
     { href: '/forensics', icon: Search, label: 'Forensics' },
-    { href: '/audit', icon: FileText, label: 'Audit Logs' },
-    { href: '/bastionbot', icon: MessageSquare, label: 'BastionBot' },
+    // Audit Logs are an admin/analyst concern; not shown to site clients
+    ...(!isClientUser ? [{ href: '/audit' as const, icon: FileText, label: 'Audit Logs' }] : []),
+    ...(isDevMode ? [] : [{ href: '/bastionbot' as const, icon: MessageSquare, label: 'BastionBot' }]),
+    ...(canUseAdminClientView && adminViewMode === 'tenant'
+      ? [{ href: '/settings/access' as const, icon: UserCog, label: 'Provisioning' }]
+      : []),
   ];
 
   return (

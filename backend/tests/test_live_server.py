@@ -16,7 +16,6 @@ pytestmark = pytest.mark.integration
 def test_live_bastionbot_chat_roundtrip():
     headers = {
         "Authorization": "Bearer test-token",
-        "X-BastionFed-UID": "live-user-faheem",
         "Content-Type": "application/json",
     }
 

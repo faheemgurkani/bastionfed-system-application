@@ -5,7 +5,8 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 from app.bastionbot import bastionbot_store
-from app.store.memory import state
+from app.config import settings
+from app.store.tenant_store import tenant_store
 
 
 def _detail_payload(res_json: dict[str, Any]) -> tuple[str | None, str | None]:
@@ -18,10 +19,13 @@ def _detail_payload(res_json: dict[str, Any]) -> tuple[str | None, str | None]:
 
 
 def _seeded_ids() -> dict[str, str]:
+    alert_id = tenant_store.list_alerts(settings.demo_tenant_id, limit=1)[0][0].id
+    incident_id = tenant_store.list_incidents(settings.demo_tenant_id, limit=1)[0][0].id
+    sample_id = tenant_store.list_samples(settings.demo_tenant_id, limit=1)[0][0].id
     return {
-        "alert_id": state.alerts[0].id,
-        "incident_id": state.incidents[0].id,
-        "sample_id": state.malware_samples[0].id,
+        "alert_id": alert_id,
+        "incident_id": incident_id,
+        "sample_id": sample_id,
     }
 
 
@@ -66,30 +70,36 @@ def test_openapi_contains_unified_bastionbot_paths(client: TestClient):
         assert p in paths, f"missing OpenAPI path {p}"
 
 
-def test_guest_read_endpoints_still_work_for_non_bastionbot_routes(client: TestClient):
+def test_dev_mode_read_endpoints_still_work_for_non_bastionbot_routes(client: TestClient):
+    ids = _seeded_ids()
+    assert client.get(f"/api/alerts/{ids['alert_id']}?dev=true").status_code == 200
+    assert client.get("/api/incidents?dev=true").status_code == 200
+    assert client.get("/api/fl/rounds?dev=true").status_code == 200
+    assert client.get("/api/fl/clients?dev=true").status_code == 200
+    assert client.get(f"/api/forensics/samples/{ids['sample_id']}?dev=true").status_code == 200
+    assert client.get("/api/audit/logs?dev=true").status_code == 200
+
+
+def test_legacy_guest_query_param_still_enables_dev_mode_reads(client: TestClient):
+    """Compatibility: ?guest=true is equivalent to ?dev=true until fully removed."""
     ids = _seeded_ids()
     assert client.get(f"/api/alerts/{ids['alert_id']}?guest=true").status_code == 200
-    assert client.get("/api/incidents?guest=true").status_code == 200
-    assert client.get("/api/fl/rounds?guest=true").status_code == 200
-    assert client.get("/api/fl/clients?guest=true").status_code == 200
-    assert client.get(f"/api/forensics/samples/{ids['sample_id']}?guest=true").status_code == 200
-    assert client.get("/api/audit/logs?guest=true").status_code == 200
 
 
 def test_bastionbot_routes_require_signed_in_user(client: TestClient):
     assert client.get("/api/bastionbot/conversations").status_code == 401
+    assert client.get("/api/bastionbot/conversations?dev=true").status_code == 403
+    assert client.post("/api/bastionbot/chat?dev=true", json={"message": "hi"}).status_code == 403
     assert client.get("/api/bastionbot/conversations?guest=true").status_code == 403
-    assert client.post("/api/bastionbot/chat?guest=true", json={"message": "hi"}).status_code == 403
 
 
-def test_bastionbot_requires_uid_header(client: TestClient):
+def test_bastionbot_accepts_verified_identity_without_uid_header(client: TestClient):
     r = client.post(
         "/api/bastionbot/chat",
         headers={"Authorization": "Bearer test-token"},
         json={"message": "Explain the alert workflow"},
     )
-    assert r.status_code == 400
-    assert _detail_payload(r.json())[1] == "BASTIONBOT_UID_REQUIRED"
+    assert r.status_code == 200
 
 
 def test_bastionbot_creates_new_conversation_when_id_omitted(client: TestClient, auth_headers: dict[str, str]):
@@ -144,11 +154,9 @@ def test_bastionbot_conversation_list_is_user_scoped(client: TestClient, auth_he
     assert _detail_payload(foreign_history.json())[1] == "CONVERSATION_NOT_FOUND"
 
 
-def test_bastionbot_sqlite_persists_across_state_reset(client: TestClient, auth_headers: dict[str, str]):
+def test_bastionbot_sqlite_persists_across_follow_up_requests(client: TestClient, auth_headers: dict[str, str]):
     created = _create_chat(client, auth_headers, message="How does FL Health work?")
     conversation_id = created.json()["conversationId"]
-
-    state.reset()
 
     history = client.get(f"/api/bastionbot/conversations/{conversation_id}", headers=auth_headers)
     assert history.status_code == 200
@@ -197,7 +205,7 @@ def test_bastionbot_updates_user_memory_topics(client: TestClient, auth_headers:
     assert second.status_code == 200
     assert second.json()["memoryUsed"] is True
 
-    memory = bastionbot_store.get_user_memory("user-faheem")
+    memory = bastionbot_store.get_user_memory(settings.demo_tenant_id, "user-faheem")
     assert memory is not None
     assert memory.last_active_conversation_id == first.json()["conversationId"]
     assert memory.recent_topics
@@ -219,9 +227,9 @@ def test_sse_requires_auth(client: TestClient):
 
 def test_mutations_require_user_auth(client: TestClient):
     ids = _seeded_ids()
-    assert client.post(f"/api/alerts/{ids['alert_id']}/escalate?guest=true").status_code == 403
-    assert client.post(f"/api/incidents/{ids['incident_id']}/playbook/run?guest=true").status_code == 403
-    assert client.post("/api/fl/models/v4.2.1-DNN/activate?guest=true").status_code == 403
+    assert client.post(f"/api/alerts/{ids['alert_id']}/escalate?dev=true").status_code == 403
+    assert client.post(f"/api/incidents/{ids['incident_id']}/playbook/run?dev=true").status_code == 403
+    assert client.post("/api/fl/models/v4.2.1-DNN/activate?dev=true").status_code == 403
 
 
 def test_escalate_creates_incident(client: TestClient, auth_headers: dict[str, str]):
@@ -244,8 +252,14 @@ def test_activate_model(client: TestClient, auth_headers: dict[str, str]):
     assert r.json()["activated"] == "v4.2.1-DNN"
 
 
+def test_activate_model_requires_owner_or_admin(client: TestClient, other_auth_headers: dict[str, str]):
+    r = client.post("/api/fl/models/v4.2.1-DNN/activate", headers=other_auth_headers)
+    assert r.status_code == 403
+    assert _detail_payload(r.json())[1] == "TENANT_ADMIN_REQUIRED"
+
+
 def test_audit_logs_shape(client: TestClient):
-    r = client.get("/api/audit/logs?guest=true&limit=5")
+    r = client.get("/api/audit/logs?dev=true&limit=5")
     assert r.status_code == 200
     j = r.json()
     assert "items" in j and isinstance(j["items"], list)
@@ -264,25 +278,25 @@ def test_read_endpoints_require_auth_without_guest(client: TestClient):
 
 
 def test_alert_detail_404(client: TestClient):
-    r = client.get("/api/alerts/ALT-NOT-REAL?guest=true")
+    r = client.get("/api/alerts/ALT-NOT-REAL?dev=true")
     assert r.status_code == 404
     assert _detail_payload(r.json())[1] == "ALERT_NOT_FOUND"
 
 
 def test_sample_detail_404(client: TestClient):
-    r = client.get("/api/forensics/samples/MAL-NOT-REAL?guest=true")
+    r = client.get("/api/forensics/samples/MAL-NOT-REAL?dev=true")
     assert r.status_code == 404
     assert _detail_payload(r.json())[1] == "SAMPLE_NOT_FOUND"
 
 
 def test_incidents_pagination_and_cursor(client: TestClient):
-    first = client.get("/api/incidents?guest=true&limit=2")
+    first = client.get("/api/incidents?dev=true&limit=2")
     assert first.status_code == 200
     body = first.json()
     assert len(body["items"]) == 2
     assert body["nextCursor"] is not None
 
-    second = client.get(f"/api/incidents?guest=true&limit=2&cursor={body['nextCursor']}")
+    second = client.get(f"/api/incidents?dev=true&limit=2&cursor={body['nextCursor']}")
     assert second.status_code == 200
     ids1 = {x["id"] for x in body["items"]}
     ids2 = {x["id"] for x in second.json()["items"]}
@@ -290,27 +304,27 @@ def test_incidents_pagination_and_cursor(client: TestClient):
 
 
 def test_audit_logs_filter_actor(client: TestClient):
-    r = client.get("/api/audit/logs?guest=true&actor=BastionFed%20System")
+    r = client.get("/api/audit/logs?dev=true&actor=BastionFed%20System")
     assert r.status_code == 200
     for item in r.json()["items"]:
         assert item["actor"] == "BastionFed System"
 
 
 def test_audit_logs_filter_action(client: TestClient):
-    r = client.get("/api/audit/logs?guest=true&action=DETECTION_MADE")
+    r = client.get("/api/audit/logs?dev=true&action=DETECTION_MADE")
     assert r.status_code == 200
     for item in r.json()["items"]:
         assert item["action"] == "DETECTION_MADE"
 
 
 def test_audit_logs_cursor_and_limit(client: TestClient):
-    first = client.get("/api/audit/logs?guest=true&limit=3")
+    first = client.get("/api/audit/logs?dev=true&limit=3")
     assert first.status_code == 200
     body = first.json()
     assert len(body["items"]) == 3
     assert body["nextCursor"] is not None
 
-    second = client.get(f"/api/audit/logs?guest=true&limit=3&cursor={body['nextCursor']}")
+    second = client.get(f"/api/audit/logs?dev=true&limit=3&cursor={body['nextCursor']}")
     assert second.status_code == 200
     ids1 = {x["id"] for x in body["items"]}
     ids2 = {x["id"] for x in second.json()["items"]}
@@ -327,7 +341,7 @@ def test_escalate_sets_alert_in_review(client: TestClient, auth_headers: dict[st
     alert_id = _seeded_ids()["alert_id"]
     r = client.post(f"/api/alerts/{alert_id}/escalate", headers=auth_headers)
     assert r.status_code == 200
-    detail = client.get(f"/api/alerts/{alert_id}?guest=true")
+    detail = client.get(f"/api/alerts/{alert_id}?dev=true")
     assert detail.status_code == 200
     assert detail.json()["status"] == "IN_REVIEW"
 

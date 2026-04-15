@@ -30,7 +30,7 @@ const leftColumnCards = [
     title: "Federated Learning",
     medium: "Privacy-Preserving Detection",
     description:
-      "Byzantine-robust, DP-protected aggregation; on-device training so raw data never leaves the edge. Drift detection and a model zoo (DNN, GNN, Ensemble) keep detection accurate and resilient.",
+      "Research/demo FL surfaces, model selection, and drift views remain available for evaluation. Operational SOC workflows are driven by tenant-scoped ingest and analyst evidence, not synthetic multi-site telemetry.",
     minH: LARGE,
     persistHover: true,
     bottomDescription: true, // description anchored to bottom of card
@@ -53,7 +53,7 @@ const middleColumnCards = [
     title: "Threat Triage & Intel",
     medium: "SIEM & Threat Intelligence",
     description:
-      "Event correlation across IoMT nodes, MISP/OpenCTI IoC enrichment, and MITRE ATT&CK for ICS/IoT. Alert triage by severity, device criticality, and confidence for rapid, contextual response.",
+      "Tenant-scoped ingest accepts webhook/API submissions from SIEM-style feeds, EDR posture events, and ticketing systems. ATT&CK mapping and source provenance keep triage tied to real upstream evidence.",
     minH: SMALL,
     persistHover: false,
     bottomDescription: false,
@@ -73,7 +73,7 @@ const middleColumnCards = [
     title: "Audit & Compliance",
     medium: "Governance Layer",
     description:
-      "Immutable audit logs, HIPAA/HITECH alignment reports, and access controls for every analyst action in the SOC.",
+      "Tamper-evident audit logs, exportable evidence bundles, and runbook-backed controls for retention, IAM review, and incident documentation.",
     minH: SMALL,
     persistHover: false,
     bottomDescription: false,
@@ -85,7 +85,7 @@ const rightColumnCard = {
   title: "SOAR & Forensics",
   medium: "Automated Response",
   description:
-    "Automated playbooks, device quarantine, and ticketing. Post-incident malware repository, root-cause reports, and a feedback loop from confirmed true/false positives back into FL training.",
+    "Automated playbooks, device quarantine, and ticket-linked incidents. Forensics tracks sample upload, scan, quarantine, release, and expiry states with chain-of-custody metadata for each transition.",
   minH: LARGE,
   persistHover: false,
   bottomDescription: true,
@@ -145,7 +145,7 @@ export function WorkSection() {
           <h2 className="mt-4 font-[var(--font-bebas)] text-5xl md:text-7xl tracking-tight">SOC CAPABILITIES</h2>
         </div>
         <p className="hidden md:block max-w-xs font-mono text-xs text-muted-foreground text-right leading-relaxed">
-          Six integrated layers covering FL detection, SIEM correlation, threat intel, SOAR, forensics, and compliance.
+          Real ingest, analyst triage, forensics evidence handling, and carefully labeled research/demo ML surfaces.
         </p>
       </div>
 

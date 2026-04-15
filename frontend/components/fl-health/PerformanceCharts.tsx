@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 
@@ -19,7 +20,8 @@ type FLRoundsResponse = {
 };
 
 export function PerformanceCharts() {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [rounds, setRounds] = useState<FLRound[]>([]);
 
   useEffect(() => {
@@ -30,8 +32,8 @@ export function PerformanceCharts() {
     async function load() {
       try {
         let data: FLRoundsResponse;
-        if (isGuest) {
-          data = await apiFetchJson<FLRoundsResponse>('/api/fl/rounds', { guest: true, signal: ac.signal });
+        if (isDevMode) {
+          data = await apiFetchJson<FLRoundsResponse>('/api/fl/rounds', { devMode: true, signal: ac.signal });
         } else if (user) {
           const token = await user.getIdToken();
           data = await apiFetchJson<FLRoundsResponse>('/api/fl/rounds', {
@@ -53,7 +55,7 @@ export function PerformanceCharts() {
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, user, viewScopeKey]);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

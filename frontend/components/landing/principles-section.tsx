@@ -7,53 +7,53 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
+const PRINCIPLES = [
+  {
+    number: "01",
+    titleParts: [
+      { text: "PRIVACY", highlight: true },
+      { text: " BY DESIGN", highlight: false },
+    ],
+    description:
+      "Raw patient data never leaves the edge. Differential privacy and Byzantine-robust aggregation ensure compliance without sacrificing detection accuracy.",
+    align: "left",
+  },
+  {
+    number: "02",
+    titleParts: [
+      { text: "RESILIENCE", highlight: true },
+      { text: " OVER RELIANCE", highlight: false },
+    ],
+    description:
+      "Federated architecture eliminates single points of failure. Models degrade gracefully; the SOC stays operational even when edge nodes are compromised.",
+    align: "right",
+  },
+  {
+    number: "03",
+    titleParts: [
+      { text: "ANALYST-", highlight: false },
+      { text: "CENTRIC", highlight: true },
+    ],
+    description:
+      "Every layer—from alert feed to forensics to BastionBot—is designed around analyst workflow. Signal clarity over dashboard noise, always.",
+    align: "left",
+  },
+  {
+    number: "04",
+    titleParts: [
+      { text: "CONTEXTUAL ", highlight: false },
+      { text: "RESPONSE", highlight: true },
+    ],
+    description:
+      "ATT&CK mapping, device criticality scoring, and SOAR playbooks ensure every action is proportional, documented, and auditable.",
+    align: "right",
+  },
+] as const;
+
 export function PrinciplesSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const principlesRef = useRef<HTMLDivElement>(null);
-
-  const principles = [
-    {
-      number: "01",
-      titleParts: [
-        { text: "PRIVACY", highlight: true },
-        { text: " BY DESIGN", highlight: false },
-      ],
-      description:
-        "Raw patient data never leaves the edge. Differential privacy and Byzantine-robust aggregation ensure compliance without sacrificing detection accuracy.",
-      align: "left",
-    },
-    {
-      number: "02",
-      titleParts: [
-        { text: "RESILIENCE", highlight: true },
-        { text: " OVER RELIANCE", highlight: false },
-      ],
-      description:
-        "Federated architecture eliminates single points of failure. Models degrade gracefully; the SOC stays operational even when edge nodes are compromised.",
-      align: "right",
-    },
-    {
-      number: "03",
-      titleParts: [
-        { text: "ANALYST-", highlight: false },
-        { text: "CENTRIC", highlight: true },
-      ],
-      description:
-        "Every layer—from alert feed to forensics to BastionBot—is designed around analyst workflow. Signal clarity over dashboard noise, always.",
-      align: "left",
-    },
-    {
-      number: "04",
-      titleParts: [
-        { text: "CONTEXTUAL ", highlight: false },
-        { text: "RESPONSE", highlight: true },
-      ],
-      description:
-        "ATT&CK mapping, device criticality scoring, and SOAR playbooks ensure every action is proportional, documented, and auditable.",
-      align: "right",
-    },
-  ];
 
   useEffect(() => {
     if (!sectionRef.current || !headerRef.current || !principlesRef.current)
@@ -74,7 +74,8 @@ export function PrinciplesSection() {
 
       const articles = principlesRef.current?.querySelectorAll("article");
       articles?.forEach((article, index) => {
-        const isRight = principles[index].align === "right";
+        const principle = PRINCIPLES[index];
+        const isRight = principle?.align === "right";
         gsap.from(article, {
           x: isRight ? 80 : -80,
           opacity: 0,
@@ -108,7 +109,7 @@ export function PrinciplesSection() {
       </div>
 
       <div ref={principlesRef} className="space-y-24 md:space-y-32">
-        {principles.map((principle, index) => (
+        {PRINCIPLES.map((principle, index) => (
           <article
             key={index}
             className={`flex flex-col ${
@@ -118,7 +119,7 @@ export function PrinciplesSection() {
             }`}
           >
             <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground mb-4">
-              {principle.number} / {principle.titleParts[0].text.split(" ")[0]}
+              {principle.number} / {(principle.titleParts[0]?.text.split(" ")[0] ?? principle.number)}
             </span>
 
             <h3 className="font-[var(--font-bebas)] text-4xl md:text-6xl lg:text-8xl tracking-tight leading-none">

@@ -8,7 +8,10 @@ from app.models.domain import (
     BotMessage,
     ConversationSummary,
     FLClient,
+    FLClientType,
     FLRound,
+    IngestEventResult,
+    IngestSource,
     Incident,
     MalwareSample,
     SourceCitation,
@@ -36,12 +39,56 @@ class AuthSessionRequest(CamelRequest):
     email: str | None = None
     display_name: str | None = None
     photo_url: str | None = None
+    account_type: str | None = Field(None, alias="accountType")
 
 
 class AuthSessionResponse(CamelRequest):
     uid: str
     created_at: str = Field(..., alias="createdAt")
     last_login_at: str = Field(..., alias="lastLoginAt")
+    tenant_id: str | None = Field(None, alias="tenantId")
+    role: str | None = None
+    is_new_tenant: bool = Field(..., alias="isNewTenant")
+    needs_client_invite: bool = Field(False, alias="needsClientInvite")
+
+
+class AuthBootstrapResponse(CamelRequest):
+    has_membership: bool = Field(..., alias="hasMembership")
+    tenant_id: str | None = Field(None, alias="tenantId")
+    role: str | None = None
+
+
+class ClientUserInviteCreateRequest(CamelRequest):
+    email: str | None = None
+    fl_client_ids: list[str] = Field(..., alias="flClientIds")
+    expires_in_days: int = Field(14, alias="expiresInDays")
+
+
+class ClientUserInviteCreateResponse(CamelRequest):
+    invite_id: str = Field(..., alias="inviteId")
+    token: str
+    expires_in_days: int = Field(..., alias="expiresInDays")
+
+
+class ClientUserInviteAcceptRequest(CamelRequest):
+    token: str
+
+
+class ClientUserInviteItem(CamelRequest):
+    invite_id: str = Field(..., alias="inviteId")
+    email: str | None = None
+    fl_client_ids: list[str] = Field(..., alias="flClientIds")
+    expires_at: str = Field(..., alias="expiresAt")
+    created_at: str = Field(..., alias="createdAt")
+    consumed_at: str | None = Field(None, alias="consumedAt")
+
+
+class ClientUserInvitesListResponse(CamelRequest):
+    invites: list[ClientUserInviteItem]
+
+
+class FLClientPatchBody(CamelRequest):
+    client_type: FLClientType = Field(..., alias="clientType")
 
 
 class AlertPatchRequest(CamelRequest):
@@ -111,6 +158,33 @@ class AuditLogsResponse(CamelRequest):
     total: int
 
 
+class IngestSourceCreateRequest(CamelRequest):
+    name: str
+    source_type: str = Field(..., alias="sourceType")
+    connector_kind: str = Field(..., alias="connectorKind")
+
+
+class IngestSourceResponse(CamelRequest):
+    source: IngestSource
+    secret: str | None = None
+
+
+class IngestSourceListResponse(CamelRequest):
+    items: list[IngestSource]
+
+
+class IngestEventRequest(CamelRequest):
+    source_id: str = Field(..., alias="sourceId")
+    external_id: str = Field(..., alias="externalId")
+    event_type: str = Field(..., alias="eventType")
+    occurred_at: str | None = Field(None, alias="occurredAt")
+    payload: dict
+
+
+class IngestEventResponse(CamelRequest):
+    result: IngestEventResult
+
+
 class ConversationListResponse(CamelRequest):
     conversations: list[ConversationSummary]
 
@@ -139,3 +213,51 @@ class FLModelActivateResponse(CamelRequest):
     activated: str
     previously_active: str = Field(..., alias="previouslyActive")
     switched_at: str = Field(..., alias="switchedAt")
+
+
+# --- Admin client-provisioning (onboarding) ---
+
+class OnboardingClientInput(CamelRequest):
+    """A single client definition submitted by an admin during onboarding."""
+
+    node_name: str = Field(..., alias="nodeName")
+    client_type: str = Field(..., alias="clientType")  # "PERSON" | "DEVICE"
+    email: str | None = Field(default=None)
+    department: str | None = Field(default=None)
+
+
+class OnboardingClientResult(CamelRequest):
+    """Per-client result returned from the onboarding endpoint."""
+
+    node_name: str = Field(..., alias="nodeName")
+    client_type: str = Field(..., alias="clientType")
+    status: str  # "created" | "error" | "email_failed"
+    client_id: str | None = Field(default=None, alias="clientId")
+    email: str | None = Field(default=None)
+    firebase_uid: str | None = Field(default=None, alias="firebaseUid")
+    error: str | None = Field(default=None)
+    email_error: str | None = Field(default=None, alias="emailError")
+    identity_only: bool = Field(
+        default=False,
+        alias="identityOnly",
+        description="True when BASTIONFED_IDENTITY_ONLY_PROVISIONING: DB shell only, no Firebase/email.",
+    )
+
+
+class OnboardingClientsRequest(CamelRequest):
+    clients: list[OnboardingClientInput]
+    tenant_name: str | None = Field(default=None, alias="tenantName")
+
+
+class OnboardingClientsResponse(CamelRequest):
+    results: list[OnboardingClientResult]
+    created_count: int = Field(..., alias="createdCount")
+    error_count: int = Field(..., alias="errorCount")
+
+
+class OnboardingLimitsResponse(CamelRequest):
+    """How many more clients the current admin may provision for this tenant."""
+
+    max_clients_per_admin: int
+    already_provisioned: int
+    remaining: int

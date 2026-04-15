@@ -18,7 +18,8 @@ This milestone intentionally keeps BastionBot in **read-only ask mode**. It expl
 ### Access model
 
 - BastionBot is available only to **signed-in users**
-- guest mode is explicitly blocked in the API
+- **`client_user`** accounts: live-data grounding (alerts, incidents, KPIs, FL, audit verify) is limited to **allowed FL client IDs** from `membership_client_scopes`, matching list/detail API filtering
+- dev/demo read mode is explicitly blocked in the API
 - users who are not signed in see a dedicated sign-in message on `/bastionbot`
 - the frontend explains that sign-up or sign-in is required because conversations and memory are isolated per user
 
@@ -30,7 +31,7 @@ This milestone intentionally keeps BastionBot in **read-only ask mode**. It expl
   - their own message history
   - their own memory record
 - foreign-user access to another conversation returns `404`
-- guest users do not get BastionBot memory or conversation access
+- dev mode users do not get BastionBot memory or conversation access (same as unsigned)
 
 ### Ask-mode behavior
 
@@ -57,7 +58,7 @@ Relevant settings:
 ```env
 GROQ_API_KEY=...
 GROQ_MODEL=llama-3.1-8b-instant
-BASTIONBOT_DB_PATH=data/bastionbot.sqlite3
+BASTIONBOT_DB_PATH=data/runtime/bastionbot.sqlite3
 ```
 
 Notes:
@@ -138,7 +139,7 @@ Required for BastionBot routes:
 Behavior:
 
 - anonymous requests return `401`
-- guest requests return `403`
+- dev mode requests return `403`
 - signed-in requests missing `X-BastionFed-UID` return `400` with `BASTIONBOT_UID_REQUIRED`
 
 ### Request and response models
@@ -188,7 +189,7 @@ Stored data:
 Default database path:
 
 ```env
-BASTIONBOT_DB_PATH=data/bastionbot.sqlite3
+BASTIONBOT_DB_PATH=data/runtime/bastionbot.sqlite3
 ```
 
 The store is initialized during FastAPI lifespan startup and can be redirected in tests with a temporary SQLite path.
@@ -220,7 +221,7 @@ Implemented in `frontend/app/bastionbot/page.tsx`.
 Behavior:
 
 - loading state while auth is resolving
-- guest and anonymous users see a sign-in-required card
+- dev mode and anonymous users see a sign-in-required card
 - signed-in users see the BastionBot workspace
 
 ### Workspace
@@ -256,7 +257,7 @@ The backend pytest suite now verifies:
 
 - BastionBot OpenAPI paths exist
 - signed-in access is required
-- guest mode is blocked from BastionBot routes
+- dev mode mode is blocked from BastionBot routes
 - `X-BastionFed-UID` is required
 - new conversations are created when `conversationId` is omitted
 - message history order is correct
@@ -301,7 +302,7 @@ export LIVE_SERVER_URL=http://127.0.0.1:8000
 
 - sign in with Google and open `/bastionbot`
 - confirm the chat workspace loads for signed-in users
-- open `/bastionbot` in guest mode and confirm the sign-up or sign-in message appears
+- open `/bastionbot` in dev mode mode and confirm the sign-up or sign-in message appears
 - start a new conversation and confirm it appears in the sidebar
 - send a follow-up message and confirm the same conversation remains active
 - refresh the page and confirm the last active conversation reloads

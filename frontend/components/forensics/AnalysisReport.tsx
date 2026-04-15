@@ -40,6 +40,21 @@ export function AnalysisReport({ sample }: AnalysisReportProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-8">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-bg-base border border-border-default p-4 rounded-md flex flex-col gap-1">
+            <span className="font-display text-[10px] text-text-muted uppercase tracking-wider">Lifecycle</span>
+            <span className="font-mono text-sm text-white">{sample.status}</span>
+            <span className="font-mono text-[10px] text-text-secondary">
+              Scan {sample.scanStatus ?? 'NOT_SCANNED'} · Quarantine {sample.quarantineStatus ?? 'NONE'} · Retention {sample.retentionStatus ?? 'ACTIVE'}
+            </span>
+          </div>
+          <div className="bg-bg-base border border-border-default p-4 rounded-md flex flex-col gap-1">
+            <span className="font-display text-[10px] text-text-muted uppercase tracking-wider">Scanner Verdict</span>
+            <span className="font-mono text-sm text-white">{String(sample.scannerVerdict?.verdict ?? 'Pending')}</span>
+            <span className="font-mono text-[10px] text-text-secondary">{String(sample.scannerVerdict?.summary ?? 'Awaiting scan execution')}</span>
+          </div>
+        </div>
+
         {/* Hashes */}
         <div className="grid grid-cols-2 gap-4">
           <div className="bg-bg-base border border-border-default p-4 rounded-md flex flex-col gap-1">
@@ -51,6 +66,23 @@ export function AnalysisReport({ sample }: AnalysisReportProps) {
             <span className="font-mono text-sm text-white break-all">{sample.sha256}</span>
           </div>
         </div>
+
+        {sample.chainOfCustody && sample.chainOfCustody.length > 0 && (
+          <div>
+            <h3 className="font-display text-sm text-white uppercase tracking-wider mb-4">Chain of Custody</h3>
+            <div className="border border-border-default rounded-md overflow-hidden">
+              {sample.chainOfCustody.map((entry, index) => (
+                <div key={`${entry.timestamp}-${index}`} className="p-3 border-b last:border-b-0 border-border-default bg-bg-base">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="font-mono text-xs text-white">{entry.action}</span>
+                    <span className="font-mono text-[10px] text-text-muted">{new Date(entry.timestamp).toLocaleString()}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-text-secondary">{entry.actor} · {entry.detail}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Static Analysis */}
         <div>

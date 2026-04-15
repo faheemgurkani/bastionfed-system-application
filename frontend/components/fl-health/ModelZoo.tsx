@@ -2,249 +2,456 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { apiFetchJson, apiUrl, ApiError, isAbortError } from '@/lib/api';
+import { useFLClients } from '@/contexts/fl-clients-context';
+import { useViewMode } from '@/contexts/view-mode-context';
+import { apiFetchJson, apiUrl, ApiError, getClientViewIdsForRequests, isAbortError } from '@/lib/api';
 
-type FLStatusPartial = {
-  activeModel: string;
-  modelZoo: string[];
+type RegistryModel = {
+  name: string;
+  type: string;
+  accuracy: number;
+  fpRate: number;
+  size: string;
+  trainedOn: string;
+  description: string;
+  active: boolean;
+  flClientId?: string | null;
+  modelScope?: string;
+  storagePath?: string | null;
 };
 
-type ModelInfo = { accuracy: string; desc: string; tags: string[] };
-type ModelMetricsResponse = {
-  available: boolean;
-  models?: Record<string, { accuracy: number; samples: number; source?: string }>;
-};
-
-const GLOBAL_META: Record<string, ModelInfo> = {
-  'fl-meta-v1': {
-    accuracy: '88.1%',
-    desc: 'Federated meta-fusion model combining ResNet50 image branch and DeepDNN FV branch via learned weighted fusion.',
-    tags: ['Fusion', 'FL-FedAvg', 'Global'],
-  },
-  'fl-resnet-v1': {
-    accuracy: '85.3%',
-    desc: 'ResNet50 backbone trained on bi-gram DCT malware visualization images. Image-only branch.',
-    tags: ['Image', 'ResNet50', 'Global'],
-  },
-  'fl-dnn-v1': {
-    accuracy: '84.0%',
-    desc: 'Deep Neural Network operating on 320 statistical features from PE/network logs. FV-only branch.',
-    tags: ['FV', 'DNN', 'Global'],
-  },
-};
-
-const CLIENT_LABELS: Record<number, string> = {
-  1: 'Hospital-A',
-  2: 'Hospital-B',
-  3: 'Hospital-C',
-  4: 'Hospital-D',
-  5: 'Hospital-E',
-  6: 'Hospital-F',
-  7: 'Hospital-G',
-  8: 'Hospital-H',
-};
-
-const BRANCH_META: Record<string, { accuracy: string; desc: string; tag: string }> = {
-  meta:   { accuracy: '87.2%', desc: 'Local meta-fusion (ResNet + DNN) trained on this client\'s data partition.', tag: 'Fusion' },
-  resnet: { accuracy: '84.8%', desc: 'Local ResNet50 trained on this client\'s bi-gram DCT images.', tag: 'Image' },
-  dnn:    { accuracy: '83.5%', desc: 'Local DNN trained on this client\'s 320-dim feature vectors.', tag: 'FV' },
-};
-
-function isGlobalModel(name: string) {
-  return name.startsWith('fl-');
-}
-
-function parseClientModel(name: string): { clientId: number; branch: string } | null {
-  const m = name.match(/^client-(\d+)-(meta|resnet|dnn)$/);
-  if (!m) return null;
-  return { clientId: parseInt(m[1]), branch: m[2] };
-}
+const MODEL_TYPES = ['DNN', 'CNN', 'GNN', 'HYB', 'CUSTOM'] as const;
 
 export function ModelZoo() {
-  const { user, loading: authLoading, isGuest } = useAuth();
-  const [activeModel, setActiveModel] = useState<string>('fl-meta-v1');
-  const [modelZoo, setModelZoo] = useState<string[]>([]);
+  const { user, loading: authLoading, isDevMode, role } = useAuth();
+  const { viewScopeKey } = useViewMode();
+  const clients = useFLClients();
+  const [models, setModels] = useState<RegistryModel[]>([]);
+  const [activeModel, setActiveModel] = useState<string>('');
   const [switching, setSwitching] = useState<string | null>(null);
-  const [metrics, setMetrics] = useState<Record<string, { accuracy: number; samples: number; source?: string }>>({});
+  const [activateClientId, setActivateClientId] = useState<string>('');
+
+  const [genBusy, setGenBusy] = useState(false);
+  const [genMsg, setGenMsg] = useState<string | null>(null);
+  const [genFile, setGenFile] = useState<File | null>(null);
+  const [genName, setGenName] = useState('');
+  const [genType, setGenType] = useState<string>('DNN');
+
+  const [perBusy, setPerBusy] = useState(false);
+  const [perMsg, setPerMsg] = useState<string | null>(null);
+  const [perFile, setPerFile] = useState<File | null>(null);
+  const [perName, setPerName] = useState('');
+  const [perType, setPerType] = useState<string>('DNN');
+  const [perClientId, setPerClientId] = useState<string>('');
+
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  const isAdmin = role === 'owner' || role === 'admin';
 
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
     const ac = new AbortController();
-
-    async function load() {
+    (async () => {
       try {
-        let data: FLStatusPartial;
-        if (isGuest) {
-          data = await apiFetchJson<FLStatusPartial>('/api/fl/status', { guest: true, signal: ac.signal });
-        } else if (user) {
-          const token = await user.getIdToken();
-          data = await apiFetchJson<FLStatusPartial>('/api/fl/status', {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: ac.signal,
-          });
-        } else {
+        if (isDevMode) return;
+        if (!user) {
+          setModels([]);
           return;
         }
+        const token = await user.getIdToken();
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        const cv = getClientViewIdsForRequests();
+        if (cv) headers['X-Client-View-Ids'] = cv;
+        const data = await apiFetchJson<{ models: RegistryModel[] }>('/api/fl/models', {
+          headers,
+          signal: ac.signal,
+        });
         if (!cancelled) {
-          setActiveModel(data.activeModel);
-          if (data.modelZoo?.length) setModelZoo(data.modelZoo);
+          setModels(data.models ?? []);
+          const active = (data.models ?? []).find((m) => m.active);
+          if (active) setActiveModel(active.name);
         }
       } catch (e) {
         if (isAbortError(e)) return;
-        if (!cancelled && e instanceof ApiError) console.warn('FL status:', e.message);
+        if (!cancelled && e instanceof ApiError) console.warn('FL models:', e.message);
       }
-    }
-
-    void load();
+    })();
     return () => {
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, user, viewScopeKey]);
 
   useEffect(() => {
-    if (authLoading) return;
-    let cancelled = false;
-    const ac = new AbortController();
-
-    async function loadMetrics() {
-      try {
-        let data: ModelMetricsResponse;
-        if (isGuest) {
-          data = await apiFetchJson<ModelMetricsResponse>('/api/fl/models/metrics', { guest: true, signal: ac.signal });
-        } else if (user) {
-          const token = await user.getIdToken();
-          data = await apiFetchJson<ModelMetricsResponse>('/api/fl/models/metrics', {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: ac.signal,
-          });
-        } else {
-          return;
-        }
-        if (!cancelled && data.available && data.models) setMetrics(data.models);
-      } catch (e) {
-        if (isAbortError(e)) return;
-        // ignore metrics failure (keep hardcoded fallbacks)
-      }
+    if (!activateClientId && clients.length === 1) {
+      setActivateClientId(clients[0]!.id);
     }
+  }, [clients, activateClientId]);
 
-    void loadMetrics();
-    return () => {
-      cancelled = true;
-      ac.abort();
-    };
-  }, [authLoading, isGuest, user]);
+  useEffect(() => {
+    if (!perClientId && clients.length === 1) {
+      setPerClientId(clients[0]!.id);
+    }
+  }, [clients, perClientId]);
 
-  async function handleActivate(modelName: string) {
-    if (modelName === activeModel || isGuest) return;
+  async function refreshModels(headers: Record<string, string>) {
+    const data = await apiFetchJson<{ models: RegistryModel[] }>('/api/fl/models', { headers });
+    setModels(data.models ?? []);
+  }
+
+  async function handleActivate(modelName: string, forClientId?: string | null) {
+    if (modelName === activeModel || isDevMode) return;
     setSwitching(modelName);
     try {
       const token = user ? await user.getIdToken() : null;
-      const res = await fetch(apiUrl(`/api/fl/models/${modelName}/activate`), {
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const cv = getClientViewIdsForRequests();
+      if (cv) headers['X-Client-View-Ids'] = cv;
+      const cid = (forClientId ?? activateClientId) || '';
+      const qs =
+        cid && (role === 'client_user' || isAdmin)
+          ? `?flClientId=${encodeURIComponent(cid)}`
+          : '';
+      const res = await fetch(apiUrl(`/api/fl/models/${encodeURIComponent(modelName)}/activate`) + qs, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers,
       });
       if (res.ok) {
         setActiveModel(modelName);
       }
     } catch {
-      // ignore
+      /* ignore */
     } finally {
       setSwitching(null);
     }
   }
 
-  const globalModels = modelZoo.filter(isGlobalModel).sort();
-
-  const clientGroups: Record<number, string[]> = {};
-  for (const name of modelZoo) {
-    const parsed = parseClientModel(name);
-    if (!parsed) continue;
-    if (!clientGroups[parsed.clientId]) clientGroups[parsed.clientId] = [];
-    clientGroups[parsed.clientId].push(name);
+  async function uploadGeneric() {
+    if (!user || !genFile || !genName.trim()) {
+      setGenMsg('Name and file required.');
+      return;
+    }
+    setGenBusy(true);
+    setGenMsg(null);
+    try {
+      const token = await user.getIdToken();
+      const fd = new FormData();
+      fd.append('file', genFile);
+      fd.append('name', genName.trim());
+      fd.append('modelType', genType);
+      fd.append('description', 'Generic tenant model (admin upload)');
+      fd.append('trainedOn', new Date().toISOString());
+      fd.append('sizeLabel', `${genFile.size} bytes`);
+      fd.append('accuracy', '0');
+      fd.append('fpRate', '0');
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      const cv = getClientViewIdsForRequests();
+      if (cv) headers['X-Client-View-Ids'] = cv;
+      const res = await fetch(apiUrl('/api/fl/models/upload'), { method: 'POST', headers, body: fd });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.detail?.detail || j?.detail || `HTTP ${res.status}`);
+      }
+      setGenMsg('Registered. Activate below.');
+      setGenFile(null);
+      setGenName('');
+      await refreshModels(headers);
+    } catch (e) {
+      setGenMsg(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setGenBusy(false);
+    }
   }
-  const sortedClientIds = Object.keys(clientGroups).map(Number).sort();
 
-  function renderCard(name: string, meta: ModelInfo) {
-    const isActive = name === activeModel;
-    const isLoading = switching === name;
-    const measured = metrics[name];
-    const accuracyText = measured ? `${measured.accuracy.toFixed(2)}%` : meta.accuracy;
-    return (
-      <div
-        key={name}
-        className={`bg-bg-surface rounded-lg p-4 flex flex-col gap-3 transition-colors ${
-          isActive ? 'border-2 border-white' : 'border border-border-default'
-        }`}
-      >
-        <div className="flex justify-between items-start">
-          <span className="font-mono text-sm text-white">{name}</span>
-          <span className="font-mono text-sm text-white">{accuracyText}</span>
-        </div>
-        <p className="text-xs text-text-secondary flex-1">{meta.desc}</p>
-        <div className="flex gap-1.5 flex-wrap">
-          {meta.tags.map((t) => (
-            <span key={t} className="border border-border-strong bg-bg-overlay text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-full text-text-secondary">
-              {t}
-            </span>
-          ))}
-        </div>
-        <button
-          type="button"
-          disabled={isActive || isLoading || isGuest}
-          onClick={() => handleActivate(name)}
-          className={`mt-1 py-1.5 rounded-md text-xs font-medium transition-colors disabled:cursor-not-allowed ${
-            isActive
-              ? 'bg-white text-black'
-              : 'border border-border-default text-white hover:bg-bg-overlay disabled:opacity-50'
-          }`}
-        >
-          {isLoading ? 'Switching...' : isActive ? 'Active' : 'Activate'}
-        </button>
-      </div>
-    );
+  async function uploadPersonalized() {
+    if (!user || !perFile || !perName.trim()) {
+      setPerMsg('Name and file required.');
+      return;
+    }
+    if (!perClientId) {
+      setPerMsg('Select the FL client this personalized model belongs to.');
+      return;
+    }
+    setPerBusy(true);
+    setPerMsg(null);
+    try {
+      const token = await user.getIdToken();
+      const fd = new FormData();
+      fd.append('file', perFile);
+      fd.append('name', perName.trim());
+      fd.append('modelType', perType);
+      fd.append('description', 'Client-scoped personalized model (admin upload)');
+      fd.append('trainedOn', new Date().toISOString());
+      fd.append('sizeLabel', `${perFile.size} bytes`);
+      fd.append('accuracy', '0');
+      fd.append('fpRate', '0');
+      fd.append('flClientId', perClientId);
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      const cv = getClientViewIdsForRequests();
+      if (cv) headers['X-Client-View-Ids'] = cv;
+      const res = await fetch(apiUrl('/api/fl/models/upload'), { method: 'POST', headers, body: fd });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.detail?.detail || j?.detail || `HTTP ${res.status}`);
+      }
+      setPerMsg('Registered. Activate for that client below.');
+      setPerFile(null);
+      setPerName('');
+      await refreshModels(headers);
+    } catch (e) {
+      setPerMsg(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setPerBusy(false);
+    }
   }
+
+  async function syncDiskBundles() {
+    if (!user) return;
+    setSyncBusy(true);
+    setSyncMsg(null);
+    try {
+      const token = await user.getIdToken();
+      const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+      const cv = getClientViewIdsForRequests();
+      if (cv) headers['X-Client-View-Ids'] = cv;
+      const data = await apiFetchJson<{
+        uploaded: string[];
+        registered: string[];
+        skippedMissing: string[];
+        storageFailed: string[];
+        driftObject: string | null;
+      }>('/api/fl/models/sync-global-bundles', { method: 'POST', headers });
+      const parts = [
+        data.registered?.length ? `Registered: ${data.registered.join(', ')}` : null,
+        data.skippedMissing?.length ? `Missing on disk: ${data.skippedMissing.join(', ')}` : null,
+        data.storageFailed?.length ? `Storage errors: ${data.storageFailed.join(', ')}` : null,
+        data.driftObject ? `Drift bundle: ${data.driftObject}` : null,
+      ].filter(Boolean);
+      setSyncMsg(parts.length ? parts.join(' · ') : 'Nothing to sync (no weight files under data/models).');
+      await refreshModels(headers);
+    } catch (e) {
+      setSyncMsg(e instanceof ApiError ? e.message : 'Sync failed');
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
+  const tenantWide = models.filter((m) => !m.flClientId);
+  const perClient = models.filter((m) => !!m.flClientId);
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Global Models */}
+      {isAdmin && !isDevMode && (
+        <>
+          <div className="border border-border-default rounded-lg p-4 bg-bg-surface space-y-3">
+            <span className="font-display text-xs text-white uppercase tracking-wider">Generic models (tenant-wide)</span>
+            <p className="text-[11px] text-text-muted">
+              Stored under <code className="text-white/80">global/&lt;slug&gt;/…</code> in the models bucket. All clients
+              can use these alongside any personalized weights.
+            </p>
+            {genMsg && <p className="text-xs text-amber-400 font-mono">{genMsg}</p>}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+              <input
+                placeholder="Model slug (e.g. my-dnn-v1)"
+                value={genName}
+                onChange={(e) => setGenName(e.target.value)}
+                className="bg-bg-base border border-white/20 rounded px-2 py-1.5 text-xs font-mono text-white min-w-[12rem]"
+              />
+              <select
+                aria-label="Generic model type"
+                value={genType}
+                onChange={(e) => setGenType(e.target.value)}
+                className="bg-bg-base border border-white/20 rounded px-2 py-1.5 text-xs text-white"
+              >
+                {MODEL_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <input
+                aria-label="Generic model weights file"
+                title="Model weights file"
+                type="file"
+                onChange={(e) => setGenFile(e.target.files?.[0] ?? null)}
+                className="text-xs text-white file:mr-2 file:rounded file:border-0 file:bg-white file:text-black file:px-2 file:py-1"
+              />
+              <button
+                type="button"
+                disabled={genBusy}
+                onClick={() => void uploadGeneric()}
+                className="rounded bg-white text-black px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+              >
+                {genBusy ? 'Uploading…' : 'Upload generic model'}
+              </button>
+            </div>
+          </div>
+
+          <div className="border border-border-default rounded-lg p-4 bg-bg-surface space-y-3">
+            <span className="font-display text-xs text-white uppercase tracking-wider">Personalized models (one client)</span>
+            <p className="text-[11px] text-text-muted">
+              Only the selected client sees and can activate this row. Path:{' '}
+              <code className="text-white/80">&lt;tenant&gt;/clients/&lt;client&gt;/models/…</code>
+            </p>
+            {perMsg && <p className="text-xs text-amber-400 font-mono">{perMsg}</p>}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+              <select
+                aria-label="FL client for personalized model"
+                value={perClientId}
+                onChange={(e) => setPerClientId(e.target.value)}
+                className="bg-bg-base border border-white/20 rounded px-2 py-1.5 text-xs text-white min-w-[10rem]"
+              >
+                <option value="">Select FL client…</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nodeName?.trim() || c.department || c.id}
+                  </option>
+                ))}
+              </select>
+              <input
+                placeholder="Model slug"
+                value={perName}
+                onChange={(e) => setPerName(e.target.value)}
+                className="bg-bg-base border border-white/20 rounded px-2 py-1.5 text-xs font-mono text-white min-w-[12rem]"
+              />
+              <select
+                aria-label="Personalized model type"
+                value={perType}
+                onChange={(e) => setPerType(e.target.value)}
+                className="bg-bg-base border border-white/20 rounded px-2 py-1.5 text-xs text-white"
+              >
+                {MODEL_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <input
+                aria-label="Personalized model weights file"
+                title="Model weights file"
+                type="file"
+                onChange={(e) => setPerFile(e.target.files?.[0] ?? null)}
+                className="text-xs text-white file:mr-2 file:rounded file:border-0 file:bg-white file:text-black file:px-2 file:py-1"
+              />
+              <button
+                type="button"
+                disabled={perBusy}
+                onClick={() => void uploadPersonalized()}
+                className="rounded bg-white text-black px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+              >
+                {perBusy ? 'Uploading…' : 'Upload personalized model'}
+              </button>
+            </div>
+          </div>
+
+          <div className="border border-dashed border-white/20 rounded-lg p-4 bg-bg-surface space-y-2">
+            <span className="font-display text-xs text-white uppercase tracking-wider">Seed bundled globals from disk</span>
+            <p className="text-[11px] text-text-muted">
+              Reads <code className="text-white/80">backend/data/models/pytorch/global/*.pth</code> and uploads flat keys{' '}
+              <code className="text-white/80">global/&lt;filename&gt;</code> plus <code className="text-white/80">drift_reference.npz</code>{' '}
+              when present.
+            </p>
+            {syncMsg && <p className="text-xs text-amber-400 font-mono">{syncMsg}</p>}
+            <button
+              type="button"
+              disabled={syncBusy}
+              onClick={() => void syncDiskBundles()}
+              className="rounded border border-white/30 text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-50 hover:bg-white/10"
+            >
+              {syncBusy ? 'Syncing…' : 'Sync global bundles to bucket'}
+            </button>
+          </div>
+        </>
+      )}
+
+      <div className="border border-border-default rounded-lg p-3 bg-bg-surface space-y-2">
+        <span className="font-mono text-[10px] text-text-muted uppercase">Per-client activate (optional)</span>
+        <select
+          aria-label="FL client for per-client model activation"
+          value={activateClientId}
+          onChange={(e) => setActivateClientId(e.target.value)}
+          className="bg-bg-base border border-white/20 rounded px-2 py-1.5 text-xs text-white max-w-xs"
+        >
+          <option value="">Tenant default (owner/admin)</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nodeName?.trim() || c.department || c.id}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div>
-        <span className="font-display text-xs text-white uppercase tracking-wider">Global Models (FedAvg)</span>
+        <span className="font-display text-xs text-white uppercase tracking-wider">Tenant &amp; global models</span>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-          {globalModels.map((name) => {
-            const meta = GLOBAL_META[name] ?? { accuracy: 'N/A', desc: name, tags: ['Global'] };
-            return renderCard(name, meta);
+          {tenantWide.map((m) => {
+            const isActive = m.name === activeModel;
+            const loading = switching === m.name;
+            return (
+              <div
+                key={m.name}
+                className={`bg-bg-surface rounded-lg p-4 flex flex-col gap-3 ${
+                  isActive ? 'border-2 border-white' : 'border border-border-default'
+                }`}
+              >
+                <div className="flex justify-between items-start gap-2">
+                  <span className="font-mono text-sm text-white break-all">{m.name}</span>
+                  <span className="font-mono text-xs text-white shrink-0">{m.accuracy}%</span>
+                </div>
+                <p className="text-xs text-text-secondary flex-1 line-clamp-4">{m.description}</p>
+                <div className="flex gap-1 flex-wrap">
+                  <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded-full border border-border-strong text-text-secondary">
+                    {m.modelScope ?? 'tenant'}
+                  </span>
+                  <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded-full border border-border-strong text-text-secondary">
+                    {m.type}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  disabled={isActive || loading || isDevMode}
+                  onClick={() => void handleActivate(m.name)}
+                  className={`mt-1 py-1.5 rounded-md text-xs font-medium transition-colors disabled:cursor-not-allowed ${
+                    isActive
+                      ? 'bg-white text-black'
+                      : 'border border-border-default text-white hover:bg-bg-overlay disabled:opacity-50'
+                  }`}
+                >
+                  {loading ? 'Switching…' : isActive ? 'Active' : 'Activate'}
+                </button>
+              </div>
+            );
           })}
         </div>
       </div>
 
-      {/* Client-Specific Models */}
-      {sortedClientIds.length > 0 && (
+      {perClient.length > 0 && (
         <div>
-          <span className="font-display text-xs text-white uppercase tracking-wider">Client-Specific Models (Personalized)</span>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3">
-            {sortedClientIds.map((cid) => {
-              const models = clientGroups[cid].sort();
+          <span className="font-display text-xs text-white uppercase tracking-wider">Client-scoped models</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+            {perClient.map((m) => {
+              const isActive = m.name === activeModel;
+              const loading = switching === m.name;
               return (
-                <div key={cid} className="border border-border-default rounded-lg p-4 bg-white/[0.01]">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-2 h-2 rounded-full bg-white" />
-                    <span className="font-mono text-xs text-white uppercase tracking-wider">
-                      Client-{cid} · {CLIENT_LABELS[cid] ?? `Client ${cid}`}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {models.map((name) => {
-                      const parsed = parseClientModel(name);
-                      if (!parsed) return null;
-                      const bm = BRANCH_META[parsed.branch];
-                      const meta: ModelInfo = bm
-                        ? { accuracy: bm.accuracy, desc: bm.desc, tags: [bm.tag, `Client-${cid}`] }
-                        : { accuracy: 'N/A', desc: name, tags: [`Client-${cid}`] };
-                      return renderCard(name, meta);
-                    })}
-                  </div>
+                <div
+                  key={m.name}
+                  className={`rounded-lg p-4 flex flex-col gap-2 ${
+                    isActive ? 'border-2 border-white bg-bg-surface' : 'border border-border-default bg-white/[0.01]'
+                  }`}
+                >
+                  <span className="font-mono text-xs text-white">{m.name}</span>
+                  <span className="text-[10px] text-text-muted font-mono">client: {m.flClientId}</span>
+                  <p className="text-xs text-text-secondary line-clamp-3">{m.description}</p>
+                  <button
+                    type="button"
+                    disabled={isActive || loading || isDevMode}
+                    onClick={() => void handleActivate(m.name, m.flClientId ?? null)}
+                    className="py-1.5 rounded-md text-xs border border-border-default text-white hover:bg-bg-overlay disabled:opacity-50"
+                  >
+                    {loading ? '…' : isActive ? 'Active' : 'Activate for this client'}
+                  </button>
                 </div>
               );
             })}

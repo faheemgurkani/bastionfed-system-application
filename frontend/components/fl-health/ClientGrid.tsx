@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { FLClient } from "@/lib/types";
 import { useFLClients } from "@/contexts/fl-clients-context";
 import { useAuth } from "@/contexts/auth-context";
+import { useViewMode } from "@/contexts/view-mode-context";
 import { apiFetchJson, ApiError, isAbortError } from "@/lib/api";
 import { TriangleAlert, X } from "lucide-react";
 
@@ -16,7 +17,8 @@ const STATUS_ORDER: Record<string, number> = {
 
 export function ClientGrid() {
   const clients = useFLClients();
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [detailClient, setDetailClient] = useState<FLClient | null>(null);
 
   const sortedClients = [...clients].sort(
@@ -45,9 +47,9 @@ export function ClientGrid() {
     async function loadDetail() {
       try {
         let data: FLClient;
-        if (isGuest) {
+        if (isDevMode) {
           data = await apiFetchJson<FLClient>(`/api/fl/clients/${encodeURIComponent(detailClient!.id)}`, {
-            guest: true,
+            devMode: true,
             signal: ac.signal,
           });
         } else if (user) {
@@ -71,7 +73,7 @@ export function ClientGrid() {
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, detailClient?.id, isGuest, user]);
+  }, [authLoading, detailClient?.id, isDevMode, user, viewScopeKey]);
 
   return (
     <div className="bg-bg-surface border border-border-default rounded-lg p-4 flex flex-col h-full relative">

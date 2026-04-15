@@ -16,6 +16,18 @@ export function isAbortError(e: unknown): boolean {
   return e instanceof DOMException && e.name === 'AbortError';
 }
 
+/** Owner/admin client-view scope: set by ViewModeProvider (X-Client-View-Ids / SSE clientViewIds). */
+let clientViewIdsForRequests: string | null = null;
+
+export function setClientViewIdsForRequests(ids: string | null) {
+  const t = ids?.trim();
+  clientViewIdsForRequests = t || null;
+}
+
+export function getClientViewIdsForRequests(): string | null {
+  return clientViewIdsForRequests;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -48,16 +60,31 @@ async function parseError(res: Response): Promise<{ detail?: string; code?: stri
 
 export async function apiFetchJson<T>(
   path: string,
-  init?: RequestInit & { guest?: boolean }
+  init?: RequestInit & { guest?: boolean; devMode?: boolean }
 ): Promise<T> {
-  const { guest, ...reqInit } = init || {};
+  const { guest, devMode, ...reqInit } = init || {};
   const headers = new Headers(reqInit.headers);
   if (!headers.has('Content-Type') && reqInit.body && typeof reqInit.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
   const url = new URL(apiUrl(path));
-  if (guest) url.searchParams.set('guest', 'true');
-  const res = await fetch(url.toString(), { ...reqInit, headers });
+  if (devMode || guest) url.searchParams.set('dev', 'true');
+  if (clientViewIdsForRequests && !devMode && !guest) {
+    headers.set('X-Client-View-Ids', clientViewIdsForRequests);
+  }
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), { ...reqInit, headers });
+  } catch (e) {
+    if (e instanceof TypeError) {
+      throw new ApiError(
+        `Could not reach the API at ${API_BASE_URL}. Start the backend (e.g. python dev_server.py from backend/) and ensure NEXT_PUBLIC_API_URL in frontend/.env.local matches that URL (default http://localhost:8000).`,
+        0,
+        'NETWORK_ERROR'
+      );
+    }
+    throw e;
+  }
   if (!res.ok) {
     const { detail, code } = await parseError(res);
     throw new ApiError(detail || `HTTP ${res.status}`, res.status, code);
@@ -66,16 +93,22 @@ export async function apiFetchJson<T>(
   return res.json() as Promise<T>;
 }
 
-export function eventsSourceUrl(token: string | null, isGuest: boolean): string {
+export function eventsSourceUrl(token: string | null, isDevMode: boolean): string {
   const u = new URL(apiUrl('/api/events'));
-  if (isGuest) u.searchParams.set('guest', 'true');
+  if (isDevMode) u.searchParams.set('dev', 'true');
   else if (token) u.searchParams.set('token', token);
+  if (clientViewIdsForRequests && token && !isDevMode) {
+    u.searchParams.set('clientViewIds', clientViewIdsForRequests);
+  }
   return u.toString();
 }
 
-export function flEventsSourceUrl(token: string | null, isGuest: boolean): string {
+export function flEventsSourceUrl(token: string | null, isDevMode: boolean): string {
   const u = new URL(apiUrl('/api/fl-events'));
-  if (isGuest) u.searchParams.set('guest', 'true');
+  if (isDevMode) u.searchParams.set('dev', 'true');
   else if (token) u.searchParams.set('token', token);
+  if (clientViewIdsForRequests && token && !isDevMode) {
+    u.searchParams.set('clientViewIds', clientViewIdsForRequests);
+  }
   return u.toString();
 }

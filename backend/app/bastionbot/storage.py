@@ -5,7 +5,7 @@ import sqlite3
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 from uuid import uuid4
 
 from app.models.domain import BotMessage, ConversationSummary, SourceCitation
@@ -13,6 +13,7 @@ from app.models.domain import BotMessage, ConversationSummary, SourceCitation
 
 @dataclass
 class BotUserMemory:
+    tenant_id: str
     uid: str
     last_active_conversation_id: str | None
     recent_topics: list[str]
@@ -36,6 +37,7 @@ class BastionBotStore:
                 """
                 CREATE TABLE IF NOT EXISTS bot_conversations (
                     id TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
                     uid TEXT NOT NULL,
                     title TEXT NOT NULL,
                     preview TEXT NOT NULL,
@@ -46,6 +48,7 @@ class BastionBotStore:
                 CREATE TABLE IF NOT EXISTS bot_messages (
                     id TEXT PRIMARY KEY,
                     conversation_id TEXT NOT NULL,
+                    tenant_id TEXT NOT NULL,
                     uid TEXT NOT NULL,
                     role TEXT NOT NULL,
                     content TEXT NOT NULL,
@@ -56,17 +59,19 @@ class BastionBotStore:
                 );
 
                 CREATE TABLE IF NOT EXISTS bot_user_memory (
-                    uid TEXT PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    uid TEXT NOT NULL,
                     last_active_conversation_id TEXT,
                     recent_topics_json TEXT NOT NULL DEFAULT '[]',
                     preferred_answer_style TEXT NOT NULL DEFAULT 'concise',
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (tenant_id, uid)
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_bot_conversations_uid_updated_at
-                    ON bot_conversations(uid, updated_at DESC);
+                    ON bot_conversations(tenant_id, uid, updated_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_bot_messages_conversation_created_at
-                    ON bot_messages(conversation_id, created_at ASC);
+                    ON bot_messages(tenant_id, conversation_id, created_at ASC);
                 """
             )
 
@@ -75,51 +80,52 @@ class BastionBotStore:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def list_conversations(self, uid: str) -> list[ConversationSummary]:
+    def list_conversations(self, tenant_id: str, uid: str) -> list[ConversationSummary]:
         with self._connect() as conn:
             rows = conn.execute(
                 """
                 SELECT c.id, c.title, c.preview, c.created_at, c.updated_at,
-                       (SELECT COUNT(*) FROM bot_messages m WHERE m.conversation_id = c.id) AS message_count
+                       (SELECT COUNT(*) FROM bot_messages m WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id) AS message_count
                 FROM bot_conversations c
-                WHERE c.uid = ?
+                WHERE c.tenant_id = ? AND c.uid = ?
                 ORDER BY c.updated_at DESC, c.created_at DESC
                 """,
-                (uid,),
+                (tenant_id, uid),
             ).fetchall()
         return [self._row_to_conversation(row) for row in rows]
 
-    def get_conversation(self, uid: str, conversation_id: str) -> ConversationSummary | None:
+    def get_conversation(self, tenant_id: str, uid: str, conversation_id: str) -> ConversationSummary | None:
         with self._connect() as conn:
             row = conn.execute(
                 """
                 SELECT c.id, c.title, c.preview, c.created_at, c.updated_at,
-                       (SELECT COUNT(*) FROM bot_messages m WHERE m.conversation_id = c.id) AS message_count
+                       (SELECT COUNT(*) FROM bot_messages m WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id) AS message_count
                 FROM bot_conversations c
-                WHERE c.uid = ? AND c.id = ?
+                WHERE c.tenant_id = ? AND c.uid = ? AND c.id = ?
                 """,
-                (uid, conversation_id),
+                (tenant_id, uid, conversation_id),
             ).fetchone()
         return self._row_to_conversation(row) if row else None
 
-    def get_conversation_history(self, uid: str, conversation_id: str) -> list[BotMessage] | None:
-        if self.get_conversation(uid, conversation_id) is None:
+    def get_conversation_history(self, tenant_id: str, uid: str, conversation_id: str) -> list[BotMessage] | None:
+        if self.get_conversation(tenant_id, uid, conversation_id) is None:
             return None
         with self._connect() as conn:
             rows = conn.execute(
                 """
                 SELECT id, role, content, created_at, sources_json
                 FROM bot_messages
-                WHERE uid = ? AND conversation_id = ?
+                WHERE tenant_id = ? AND uid = ? AND conversation_id = ?
                 ORDER BY created_at ASC, rowid ASC
                 """,
-                (uid, conversation_id),
+                (tenant_id, uid, conversation_id),
             ).fetchall()
         return [self._row_to_message(row) for row in rows]
 
     def create_conversation(
         self,
         *,
+        tenant_id: str,
         uid: str,
         title: str,
         preview: str,
@@ -130,17 +136,18 @@ class BastionBotStore:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO bot_conversations (id, uid, title, preview, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO bot_conversations (id, tenant_id, uid, title, preview, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (conv_id, uid, title, preview, now_iso, now_iso),
+                (conv_id, tenant_id, uid, title, preview, now_iso, now_iso),
             )
             conn.commit()
-        return self.get_conversation(uid, conv_id)  # type: ignore[return-value]
+        return self.get_conversation(tenant_id, uid, conv_id)  # type: ignore[return-value]
 
     def append_message(
         self,
         *,
+        tenant_id: str,
         uid: str,
         conversation_id: str,
         role: str,
@@ -160,17 +167,17 @@ class BastionBotStore:
             conn.execute(
                 """
                 INSERT INTO bot_messages
-                    (id, conversation_id, uid, role, content, created_at, sources_json, context_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (id, conversation_id, tenant_id, uid, role, content, created_at, sources_json, context_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (msg_id, conversation_id, uid, role, content, now_iso, serialized_sources, serialized_context),
+                (msg_id, conversation_id, tenant_id, uid, role, content, now_iso, serialized_sources, serialized_context),
             )
             current = conn.execute(
-                "SELECT title FROM bot_conversations WHERE id = ? AND uid = ?",
-                (conversation_id, uid),
+                "SELECT title FROM bot_conversations WHERE tenant_id = ? AND id = ? AND uid = ?",
+                (tenant_id, conversation_id, uid),
             ).fetchone()
             if current is None:
-                raise ValueError(f"Conversation {conversation_id} not found for uid={uid}")
+                raise ValueError(f"Conversation {conversation_id} not found for tenant_id={tenant_id} uid={uid}")
 
             next_title = current["title"]
             if title and (not next_title or next_title.lower().startswith("new conversation")):
@@ -180,9 +187,9 @@ class BastionBotStore:
                 """
                 UPDATE bot_conversations
                 SET title = ?, preview = ?, updated_at = ?
-                WHERE id = ? AND uid = ?
+                WHERE tenant_id = ? AND id = ? AND uid = ?
                 """,
-                (next_title, preview_value, now_iso, conversation_id, uid),
+                (next_title, preview_value, now_iso, tenant_id, conversation_id, uid),
             )
             conn.commit()
 
@@ -194,19 +201,20 @@ class BastionBotStore:
             sources=sources or [],
         )
 
-    def get_user_memory(self, uid: str) -> BotUserMemory | None:
+    def get_user_memory(self, tenant_id: str, uid: str) -> BotUserMemory | None:
         with self._connect() as conn:
             row = conn.execute(
                 """
-                SELECT uid, last_active_conversation_id, recent_topics_json, preferred_answer_style, updated_at
+                SELECT tenant_id, uid, last_active_conversation_id, recent_topics_json, preferred_answer_style, updated_at
                 FROM bot_user_memory
-                WHERE uid = ?
+                WHERE tenant_id = ? AND uid = ?
                 """,
-                (uid,),
+                (tenant_id, uid),
             ).fetchone()
         if row is None:
             return None
         return BotUserMemory(
+            tenant_id=row["tenant_id"],
             uid=row["uid"],
             last_active_conversation_id=row["last_active_conversation_id"],
             recent_topics=json.loads(row["recent_topics_json"] or "[]"),
@@ -217,6 +225,7 @@ class BastionBotStore:
     def upsert_user_memory(
         self,
         *,
+        tenant_id: str,
         uid: str,
         last_active_conversation_id: str | None,
         recent_topics: list[str],
@@ -228,18 +237,18 @@ class BastionBotStore:
             conn.execute(
                 """
                 INSERT INTO bot_user_memory
-                    (uid, last_active_conversation_id, recent_topics_json, preferred_answer_style, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(uid) DO UPDATE SET
+                    (tenant_id, uid, last_active_conversation_id, recent_topics_json, preferred_answer_style, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(tenant_id, uid) DO UPDATE SET
                     last_active_conversation_id = excluded.last_active_conversation_id,
                     recent_topics_json = excluded.recent_topics_json,
                     preferred_answer_style = excluded.preferred_answer_style,
                     updated_at = excluded.updated_at
                 """,
-                (uid, last_active_conversation_id, payload, preferred_answer_style, now_iso),
+                (tenant_id, uid, last_active_conversation_id, payload, preferred_answer_style, now_iso),
             )
             conn.commit()
-        return self.get_user_memory(uid)  # type: ignore[return-value]
+        return self.get_user_memory(tenant_id, uid)  # type: ignore[return-value]
 
     def _row_to_conversation(self, row: sqlite3.Row) -> ConversationSummary:
         return ConversationSummary(
@@ -262,4 +271,19 @@ class BastionBotStore:
         )
 
 
-bastionbot_store = BastionBotStore("data/bastionbot.sqlite3")
+_impl: Union[BastionBotStore, Any] = BastionBotStore("data/runtime/bastionbot.sqlite3")
+
+
+class _BastionBotStoreProxy:
+    """Delegates to the active store (SQLite or Postgres) after `set_bastionbot_store`."""
+
+    def __getattr__(self, name: str):
+        return getattr(_impl, name)
+
+
+bastionbot_store = _BastionBotStoreProxy()
+
+
+def set_bastionbot_store(store: Any) -> None:
+    global _impl
+    _impl = store

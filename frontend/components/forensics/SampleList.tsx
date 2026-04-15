@@ -5,7 +5,7 @@ import { Search, Filter, Upload } from 'lucide-react';
 
 interface SampleListProps {
   samples: MalwareSample[];
-  selectedId?: string;
+  selectedId?: string | undefined;
   onSelect: (sample: MalwareSample) => void;
 }
 
@@ -48,8 +48,9 @@ export function SampleList({ samples, selectedId, onSelect }: SampleListProps) {
             <div className="flex justify-between items-start mb-2">
               <span className="text-sm font-medium text-white truncate pr-2">{sample.filename}</span>
               <span className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                sample.status === 'ANALYZED' ? 'border-border-strong text-text-secondary' :
-                sample.status === 'ANALYZING' ? 'border-white text-white' :
+                sample.status === 'ANALYZED' || sample.status === 'SCANNED' ? 'border-border-strong text-text-secondary' :
+                sample.status === 'ANALYZING' || sample.status === 'QUEUED' ? 'border-white text-white' :
+                sample.status === 'QUARANTINED' ? 'border-severity-critical text-severity-critical' :
                 'border-border-default text-text-muted'
               }`}>
                 {sample.status}
@@ -62,7 +63,7 @@ export function SampleList({ samples, selectedId, onSelect }: SampleListProps) {
                 <span className="font-mono text-[10px] text-text-secondary">{sample.size}</span>
               </div>
               <div className="flex justify-between items-center mt-1">
-                <span className="text-[11px] text-text-secondary">{sample.type}</span>
+                <span className="text-[11px] text-text-secondary">{sample.type} · {sample.scanStatus ?? 'NOT_SCANNED'}</span>
                 <span className="font-mono text-[10px] text-text-muted">{new Date(sample.uploadTime).toLocaleDateString()}</span>
               </div>
             </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 import { apiFetchJson, ApiError, isAbortError } from '@/lib/api';
 import type { AuditLog } from '@/lib/types';
 import { ShieldAlert, LogIn, Settings, Database, Server, AlertTriangle } from 'lucide-react';
@@ -14,7 +15,8 @@ interface AuditLogTableProps {
 }
 
 export function AuditLogTable({ searchQuery, activeFilter, last24h, onRecentLogsCheck }: AuditLogTableProps) {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -31,8 +33,8 @@ export function AuditLogTable({ searchQuery, activeFilter, last24h, onRecentLogs
       setError(null);
       try {
         let data: { items: AuditLog[]; nextCursor: string | null; total: number };
-        if (isGuest) {
-          data = await apiFetchJson('/api/audit/logs?limit=10', { guest: true, signal: ac.signal });
+        if (isDevMode) {
+          data = await apiFetchJson('/api/audit/logs?limit=10', { devMode: true, signal: ac.signal });
         } else if (user) {
           const token = await user.getIdToken();
           data = await apiFetchJson('/api/audit/logs?limit=10', {
@@ -61,7 +63,7 @@ export function AuditLogTable({ searchQuery, activeFilter, last24h, onRecentLogs
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, user, viewScopeKey]);
 
   useEffect(() => {
     if (logs.length === 0) return;

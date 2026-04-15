@@ -105,13 +105,12 @@ export function HeroSection() {
           </h2>
 
           <p className="mt-7 max-w-md font-mono text-sm text-muted-foreground leading-relaxed">
-            BastionFed is an enterprise-grade Blue Team platform for healthcare
-            IoMT. Its Federated Learning core delivers privacy-preserving
-            anomaly detection at the edge while a full SOC stack—SIEM-style
-            correlation, threat intel and ATT&CK mapping, SOAR playbooks, and
-            forensics—gives analysts a single console to monitor, triage, and
-            respond. Built for the constraints and stakes of medical device
-            environments.
+            BastionFed is a tenant-scoped Blue Team platform for healthcare
+            IoMT. It pairs real ingest for alerts, devices, and incidents with
+            ATT&CK-mapped triage, forensics handling, and analyst workflows in
+            one console. Federated-learning and per-client drift surfaces are
+            presented as research/demo capabilities unless live telemetry is
+            explicitly connected.
           </p>
 
           <div className="mt-10 flex items-center gap-8">
@@ -153,11 +152,11 @@ export function HeroSection() {
           />
 
           {/* Panel */}
-          <div className="relative z-10 w-full max-w-3xl">
+          <div className="relative z-10 w-full max-w-4xl bastionfed-onboard-surface">
             {/* Close button */}
             <button
               onClick={closeModal}
-              className="absolute -top-10 right-0 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors duration-200 flex items-center gap-2"
+              className="absolute -top-11 right-0 font-mono text-[10px] uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors duration-200 flex items-center gap-2"
               aria-label="Close"
             >
               <X className="w-3.5 h-3.5" />

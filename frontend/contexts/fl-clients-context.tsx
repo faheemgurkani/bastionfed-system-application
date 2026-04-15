@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { FLClient } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 import { apiFetchJson, ApiError, flEventsSourceUrl, isAbortError } from '@/lib/api';
 
 type FLClientsContextValue = FLClient[];
@@ -10,7 +11,8 @@ type FLClientsContextValue = FLClient[];
 const FLClientsContext = createContext<FLClientsContextValue | undefined>(undefined);
 
 export function FLClientsProvider({ children }: { children: React.ReactNode }) {
-  const { user, loading: authLoading, isGuest } = useAuth();
+  const { user, loading: authLoading, isDevMode, sessionReady } = useAuth();
+  const { viewScopeKey } = useViewMode();
   const [clients, setClients] = useState<FLClient[]>([]);
 
   useEffect(() => {
@@ -22,12 +24,12 @@ export function FLClientsProvider({ children }: { children: React.ReactNode }) {
       try {
         type FLClientsResponse = { clients: FLClient[] };
         let data: FLClientsResponse;
-        if (isGuest) {
+        if (isDevMode) {
           data = await apiFetchJson<FLClientsResponse>('/api/fl/clients', {
-            guest: true,
+            devMode: true,
             signal: ac.signal,
           });
-        } else if (user) {
+        } else if (user && sessionReady) {
           const token = await user.getIdToken();
           data = await apiFetchJson<FLClientsResponse>('/api/fl/clients', {
             headers: { Authorization: `Bearer ${token}` },
@@ -49,21 +51,21 @@ export function FLClientsProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, sessionReady, user, viewScopeKey]);
 
   useEffect(() => {
     if (authLoading) return;
-    if (!isGuest && !user) return;
+    if (!isDevMode && (!user || !sessionReady)) return;
 
     let es: EventSource | null = null;
     let closed = false;
 
     async function connect() {
       let token: string | null = null;
-      if (!isGuest && user) token = await user.getIdToken();
+      if (!isDevMode && user && sessionReady) token = await user.getIdToken();
       if (closed) return;
 
-      es = new EventSource(flEventsSourceUrl(token, isGuest));
+      es = new EventSource(flEventsSourceUrl(token, isDevMode));
 
       es.onmessage = (event: MessageEvent<string>) => {
         try {
@@ -87,7 +89,7 @@ export function FLClientsProvider({ children }: { children: React.ReactNode }) {
       closed = true;
       es?.close();
     };
-  }, [authLoading, isGuest, user]);
+  }, [authLoading, isDevMode, sessionReady, user, viewScopeKey]);
 
   return (
     <FLClientsContext.Provider value={clients}>

@@ -9,10 +9,12 @@ import { ApiError, apiFetchJson, isAbortError } from '@/lib/api';
 import type { BastionBotChatResponse, BotConversationHistoryResponse, BotMessage, ConversationSummary } from '@/lib/types';
 import { Bot, Loader2, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { useViewMode } from '@/contexts/view-mode-context';
 
 export function ChatInterface() {
-  const { user, isGuest } = useAuth();
-  const signedInUser = !isGuest ? user : null;
+  const { user, isDevMode } = useAuth();
+  const { viewScopeKey } = useViewMode();
+  const signedInUser = !isDevMode ? user : null;
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<BotMessage[]>([]);
@@ -38,15 +40,14 @@ export function ChatInterface() {
     scrollToBottom();
   }, [messages]);
 
-  function storageKey(uid: string): string {
-    return `bastionbot:active:${uid}`;
+  function storageKey(uid: string, scopeKey: string): string {
+    return `bastionbot:active:${uid}:${scopeKey}`;
   }
 
   async function getBastionBotHeaders(currentUser: User): Promise<Record<string, string>> {
     const token = await currentUser.getIdToken();
     return {
       Authorization: `Bearer ${token}`,
-      'X-BastionFed-UID': currentUser.uid,
     };
   }
 
@@ -89,7 +90,10 @@ export function ChatInterface() {
         if (cancelled) return;
 
         setConversations(data.conversations);
-        const storedId = typeof window !== 'undefined' ? window.localStorage.getItem(storageKey(currentUser.uid)) : null;
+        const storedId =
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem(storageKey(currentUser.uid, viewScopeKey))
+            : null;
         const nextId = storedId && data.conversations.some((conversation) => conversation.id === storedId)
           ? storedId
           : (data.conversations[0]?.id ?? null);
@@ -113,14 +117,15 @@ export function ChatInterface() {
       cancelled = true;
       ac.abort();
     };
-  }, [signedInUser]);
+  }, [signedInUser, viewScopeKey]);
 
   function persistActiveConversation(conversationId: string | null) {
     if (!signedInUser || typeof window === 'undefined') return;
+    const key = storageKey(signedInUser.uid, viewScopeKey);
     if (conversationId) {
-      window.localStorage.setItem(storageKey(signedInUser.uid), conversationId);
+      window.localStorage.setItem(key, conversationId);
     } else {
-      window.localStorage.removeItem(storageKey(signedInUser.uid));
+      window.localStorage.removeItem(key);
     }
   }
 
