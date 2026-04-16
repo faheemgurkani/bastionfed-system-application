@@ -25,6 +25,7 @@ Thumbs.db
 backend/.venv/
 
 # ── Local / runtime data (models, samples, SQLite, etc.) ──────────────────────
+# Layout (tracked): backend/DATA_DIRECTORY.md
 backend/data/
 
 # ── Misc ──────────────────────────────────────────────────────────────────────

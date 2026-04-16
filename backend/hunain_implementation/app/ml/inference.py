@@ -3,6 +3,9 @@ FL inference service.
 Loads fl_global_resnet.pth + fl_global_meta.pth at startup.
 Accepts a bi-gram DCT PNG image and returns malware/benign prediction.
 DNN branch requires a 320-dim feature vector; pass None to use neutral 0.5 placeholder.
+
+Weights are read from ``WEIGHTS_DIR`` (``app/ml/weights/``). Symlink those files to
+``backend/data/models/`` per ``backend/DATA_DIRECTORY.md`` so the repo has one canonical tree.
 """
 from __future__ import annotations
 

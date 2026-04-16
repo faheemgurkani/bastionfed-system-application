@@ -162,7 +162,7 @@ async def upload_fl_model(
 
 @router.post("/fl/models/sync-global-bundles", response_model=dict)
 def sync_global_model_bundles(auth: Annotated[AuthContext, Depends(require_tenant_admin)]) -> dict[str, Any]:
-    """Upload `backend/data/models/pytorch/global/*.pth` (+ drift npz) to the models bucket under `global/` and register .pth rows."""
+    """Upload `backend/data/models/pytorch/global/*.pth` (+ drift npz) to the models bucket under `global/` and register .pth rows. Layout: `backend/DATA_DIRECTORY.md`."""
     if not auth.tenant_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
     if not isinstance(tenant_store, PostgresTenantStore):

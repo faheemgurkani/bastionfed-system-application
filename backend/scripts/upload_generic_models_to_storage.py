@@ -2,7 +2,7 @@
 """
 Upload generic ML artifacts from *only* ``backend/data/models`` into the Supabase ``models`` bucket.
 
-Expected layout (see ``data/models/README.md``):
+Expected layout (see ``backend/DATA_DIRECTORY.md`` and optional local ``data/models/README.md``):
   - ``drift/drift_reference.npz``
   - ``pytorch/global/*.pth`` (e.g. fl_global_resnet.pth, fl_global_dnn.pth, fl_global_meta.pth)
 

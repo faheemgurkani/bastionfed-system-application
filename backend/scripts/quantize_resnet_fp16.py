@@ -3,6 +3,7 @@
 Convert ``fl_global_resnet.pth`` (float32 state_dict) to FP16 for ~50% smaller on-disk size.
 
 Uses the same architecture as ``hunain_implementation.app.ml.models.build_resnet`` so keys match.
+Canonical tree: ``backend/DATA_DIRECTORY.md``.
 
 Default paths (only under ``backend/data/models``):
 

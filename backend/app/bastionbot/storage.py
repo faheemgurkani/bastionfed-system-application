@@ -271,6 +271,7 @@ class BastionBotStore:
         )
 
 
+# Default path is under backend/data/runtime/ when cwd is backend/ (see backend/DATA_DIRECTORY.md)
 _impl: Union[BastionBotStore, Any] = BastionBotStore("data/runtime/bastionbot.sqlite3")
 
 

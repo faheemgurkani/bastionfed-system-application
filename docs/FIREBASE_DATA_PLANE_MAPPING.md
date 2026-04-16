@@ -73,12 +73,12 @@ The tables below name **Supabase PostgreSQL** as the backing service. In the uni
 | Ingest sources + external event normalization | SQL + HTTP API | **Supabase PostgreSQL** + **FastAPI** | `ingest_sources`, `ingest_events`, and `/api/ingest/*` support tenant-scoped push connectors. |
 | SSE `/api/events`, `/api/fl-events` | Ephemeral / cache | **Upstash Redis** | Tenant-scoped pub/sub channels when Redis URL set. |
 
-### FL/ (notebook + CSVs)
+### `backend/data/models` + `FL/` (notebooks / CSVs)
 
 | Artifact | Service type | Concrete product | Notes |
 |---------|-------------|-----------------|-------|
-| Local `*.csv`, notebook | Local / ad hoc | None | Training/experiment inputs only. |
-| Published global model checkpoints, client bundle artifacts | Object + SQL metadata | **Supabase Storage** `models/` bucket + **Supabase PostgreSQL** | Weights on disk / in bucket; active model metadata lives in tenant-scoped SQL. ⚠️ 50 MB per-file limit on free tier. |
+| Local `*.csv`, notebooks under `FL/` | Local / ad hoc | None | Training/experiment inputs only. |
+| Published global checkpoints under **`backend/data/models/`** (gitignored locally), client bundle artifacts | Object + SQL metadata | **Supabase Storage** `models/` bucket + **Supabase PostgreSQL** | Canonical on-disk layout: `backend/DATA_DIRECTORY.md`. Active model metadata in tenant-scoped SQL. ⚠️ 50 MB per-file limit on free tier. |
 | Aggregator round logs / metrics | SQL | **Supabase PostgreSQL** | Round/client lists in normalized tables; per-client drift is still labeled demo/research unless real telemetry is attached. |
 
 ---

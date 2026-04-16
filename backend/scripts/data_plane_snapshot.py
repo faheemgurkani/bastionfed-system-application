@@ -6,7 +6,7 @@ Uses the same .env discovery as scripts/cleanup.py and probes:
   • PostgreSQL (SUPABASE_DATABASE_URL / DATABASE_URL) — row counts + short samples
   • Supabase Storage — buckets + whether objects exist at root
   • Redis (redis-cli TCP or Upstash REST DBSIZE)
-  • Local BastionBot SQLite (BASTIONBOT_DB_PATH / default data/runtime/bastionbot.sqlite3)
+  • Local BastionBot SQLite (BASTIONBOT_DB_PATH / default backend/data/runtime/bastionbot.sqlite3 from cwd backend/)
   • Firebase Auth — user count + emails (Identity Toolkit REST + openssl JWT, same idea as cleanup.py)
   • Firestore — document count in `users` collection
 

@@ -18,6 +18,7 @@ For **claims vs production reality** (operational scope, drift honesty, reviewer
 
 | Artifact | Env vars (`backend/.env` unless noted) | Code |
 |----------|--------------------------------------|------|
+| Local weights / SQLite / ingest (gitignored) | (paths relative to `backend/`; see **`backend/DATA_DIRECTORY.md`**) | `scripts/upload_generic_models_to_storage.py`, `scripts/ingest_client_data.py`, `app/config.py` (`BASTIONBOT_DB_PATH`) |
 | Postgres | `DATABASE_URL` / `SUPABASE_DATABASE_URL` | `app/db/migrate.py`, `app/store/tenant_store.py`, `app/bastionbot/pg_store.py`, `app/config.py` |
 | Storage | `SUPABASE_URL` / `SUPABASE_PROJECT_URL`, `SUPABASE_SERVICE_KEY` | `app/services/supabase_storage.py` (`httpx`) |
 | Redis | `REDIS_URL` / `UPSTASH_REDIS_URL` | `app/sse_bus.py`, `app/routers/events.py` |

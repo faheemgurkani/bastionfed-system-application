@@ -61,6 +61,8 @@ GROQ_MODEL=llama-3.1-8b-instant
 BASTIONBOT_DB_PATH=data/runtime/bastionbot.sqlite3
 ```
 
+(`data/runtime/` is **`backend/data/runtime/`** when the server runs with cwd `backend/`; see `backend/DATA_DIRECTORY.md`.)
+
 Notes:
 
 - `GROQ_API_KEY` is loaded from `backend/.env`
@@ -191,6 +193,8 @@ Default database path:
 ```env
 BASTIONBOT_DB_PATH=data/runtime/bastionbot.sqlite3
 ```
+
+Same path convention as above: **`backend/data/runtime/`** relative to the `backend/` working directory (`backend/DATA_DIRECTORY.md`).
 
 The store is initialized during FastAPI lifespan startup and can be redirected in tests with a temporary SQLite path.
 

@@ -179,7 +179,7 @@ def main() -> int:
     parser.add_argument(
         "--data-root",
         default=str(_BACKEND_ROOT / "data" / "batch_ingest"),
-        help="Root folder containing client_1, client_2, … (default: data/batch_ingest)",
+        help="Root folder containing client_1, client_2, … (default: backend/data/batch_ingest)",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print actions only; no DB writes")
     parser.add_argument(

@@ -2247,7 +2247,7 @@ class PostgresTenantStore:
         *,
         actor_uid: str,
     ) -> dict[str, Any]:
-        """Upload canonical weights from backend/data/models into the models bucket (global/*) and upsert registry rows (.pth only)."""
+        """Upload canonical weights from backend/data/models into the models bucket (global/*) and upsert registry rows (.pth only). See backend/DATA_DIRECTORY.md."""
         from pathlib import Path
 
         from app.services.supabase_storage import upload_model_bytes
@@ -2257,9 +2257,9 @@ class PostgresTenantStore:
         drift_dir = backend_root / "data" / "models" / "drift"
 
         known_bundles: list[tuple[str, str, str, str]] = [
-            ("generic-global-resnet", "CNN", "Bundled global ResNet (data/models/pytorch/global)", "fl_global_resnet.pth"),
-            ("generic-global-dnn", "DNN", "Bundled global DNN (data/models/pytorch/global)", "fl_global_dnn.pth"),
-            ("generic-global-meta", "HYB", "Bundled global meta-fusion (data/models/pytorch/global)", "fl_global_meta.pth"),
+            ("generic-global-resnet", "CNN", "Bundled global ResNet (backend/data/models/pytorch/global)", "fl_global_resnet.pth"),
+            ("generic-global-dnn", "DNN", "Bundled global DNN (backend/data/models/pytorch/global)", "fl_global_dnn.pth"),
+            ("generic-global-meta", "HYB", "Bundled global meta-fusion (backend/data/models/pytorch/global)", "fl_global_meta.pth"),
         ]
         known_names = {t[3] for t in known_bundles}
 

@@ -60,6 +60,8 @@ GROQ_MODEL=llama-3.1-8b-instant
 BASTIONBOT_DB_PATH=data/runtime/bastionbot.sqlite3
 ```
 
+(`data/` here means **`backend/data/`** when the process cwd is `backend/` — see **`DATA_DIRECTORY.md`**.)
+
 Optional **data plane** (see `docs/FIREBASE_DATA_PLANE_MAPPING.md`): when set, the unified backend uses normalized Supabase Postgres tables for tenant-scoped product data + BastionBot, Upstash Redis for SSE pub/sub, and Supabase Storage for malware uploads.
 
 ```env
@@ -77,14 +79,14 @@ The historical `app/db/persistence.py` / `bf_bundle` snapshot path is now **lega
 
 - Each **admin** Firebase user may provision at most **5** FL clients per tenant (person + device combined). Override with `MAX_CLIENTS_PER_ADMIN` in `.env`.
 - `GET /api/onboarding/limits` returns remaining capacity for the signed-in admin.
-- Drop JSON / dataset files under `data/batch_ingest/client_1`, `data/batch_ingest/client_2`, … (mapped to DEVICE-type `fl_clients` in `id` order) and run:
+- Drop JSON / dataset files under **`backend/data/batch_ingest/client_1`**, `client_2`, … (mapped to DEVICE-type `fl_clients` in `id` order) and run:
 
 ```bash
 python scripts/ingest_client_data.py --tenant-slug YOUR_SLUG
 # or --tenant-id TENANT_UUID
 ```
 
-See `data/README.md` for the 25% file sampling rule and payload formats. SQL migrations under `app/db/migrations/` apply automatically on startup when Postgres is configured.
+See **`DATA_DIRECTORY.md`** for the local `backend/data/` tree, 25% sampling summary, and payload pointers (`scripts/ingest_client_data.py` has the full rules). SQL migrations under `app/db/migrations/` apply automatically on startup when Postgres is configured.
 
 ## Tests
 

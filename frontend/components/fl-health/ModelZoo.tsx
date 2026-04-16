@@ -229,7 +229,7 @@ export function ModelZoo() {
         data.storageFailed?.length ? `Storage errors: ${data.storageFailed.join(', ')}` : null,
         data.driftObject ? `Drift bundle: ${data.driftObject}` : null,
       ].filter(Boolean);
-      setSyncMsg(parts.length ? parts.join(' · ') : 'Nothing to sync (no weight files under data/models).');
+      setSyncMsg(parts.length ? parts.join(' · ') : 'Nothing to sync (no weight files under backend/data/models).');
       await refreshModels(headers);
     } catch (e) {
       setSyncMsg(e instanceof ApiError ? e.message : 'Sync failed');

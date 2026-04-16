@@ -69,11 +69,13 @@ The API serves at `http://localhost:8000`. Ensure `frontend/.env.local` contains
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-Optional BastionBot persistence override:
+Optional BastionBot persistence override (path is relative to **`backend/`** when you run the API from there):
 
 ```env
 BASTIONBOT_DB_PATH=data/runtime/bastionbot.sqlite3
 ```
+
+Local model weights, drift `.npz`, SQLite, and ingest folders live under **`backend/data/`** (gitignored). See **`backend/DATA_DIRECTORY.md`** for the full layout and symlink notes for Hunain weights.
 
 Optional BastionBot Groq configuration is loaded from `backend/.env`:
 

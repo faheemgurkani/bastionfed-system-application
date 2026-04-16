@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         "http://localhost:3001,http://127.0.0.1:3001"
     )
     api_title: str = "BastionFed API"
+    # Resolved relative to cwd; run API from backend/ → backend/data/runtime/ (see backend/DATA_DIRECTORY.md)
     bastionbot_db_path: str = "data/runtime/bastionbot.sqlite3"
     # After Postgres bootstrap, merge legacy local BastionBot SQLite into bot_* tables (idempotent).
     bastionbot_import_sqlite_on_postgres_boot: bool = Field(

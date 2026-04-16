@@ -155,7 +155,7 @@ def get_model_metrics() -> dict[str, Any]:
 
     if not out["models"]:
         out["available"] = False
-        out["message"] = "No evaluatable DNN weights found in FL/weights."
+        out["message"] = "No evaluatable DNN weights found under backend/data/models or FL/weights (see backend/DATA_DIRECTORY.md)."
 
     return out
 
