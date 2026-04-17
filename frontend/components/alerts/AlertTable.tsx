@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import type { Alert } from "@/lib/types";
+import { confidencePercent } from "@/lib/alertDisplay";
 import { MoreHorizontal, ChevronDown, ChevronRight } from "lucide-react";
 import { AlertDetailDrawer } from "./AlertDetailDrawer";
 
@@ -95,7 +96,9 @@ export function AlertTable({ alerts, focusedAlertId = null }: AlertTableProps) {
             </tr>
           </thead>
           <tbody>
-            {alerts.map((alert, i) => (
+            {alerts.map((alert, i) => {
+              const confPct = confidencePercent(alert.confidence);
+              return (
               <React.Fragment key={alert.id}>
                 <tr
                   className={`border-b border-border-default cursor-pointer transition-colors ${i % 2 === 0 ? "bg-bg-surface" : "bg-bg-elevated"} hover:bg-bg-overlay`}
@@ -119,7 +122,7 @@ export function AlertTable({ alerts, focusedAlertId = null }: AlertTableProps) {
                     })}
                   </td>
                   <td className="p-3 text-[13px] font-medium text-white">
-                    {alert.device.name}
+                    {alert.device?.name ?? '—'}
                   </td>
                   <td className="p-3 text-[13px] text-text-secondary">
                     {alert.type}
@@ -137,12 +140,12 @@ export function AlertTable({ alerts, focusedAlertId = null }: AlertTableProps) {
                   <td className="p-3">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-[12px] text-white">
-                        {alert.confidence}%
+                        {Math.round(confPct * 100) / 100}%
                       </span>
                       <div className="w-16 h-1 bg-bg-subtle rounded-full overflow-hidden">
                         <div
                           className="h-full bg-white"
-                          style={{ width: `${alert.confidence}%` }}
+                          style={{ width: `${Math.min(100, confPct)}%` }}
                         />
                       </div>
                     </div>
@@ -151,7 +154,7 @@ export function AlertTable({ alerts, focusedAlertId = null }: AlertTableProps) {
                     <span
                       className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full ${getStatusStyle(alert.status)}`}
                     >
-                      {alert.status.replace("_", " ")}
+                      {alert.status?.replace("_", " ") ?? '—'}
                     </span>
                   </td>
                   <td className="p-3 text-right">
@@ -196,7 +199,8 @@ export function AlertTable({ alerts, focusedAlertId = null }: AlertTableProps) {
                   </tr>
                 )}
               </React.Fragment>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>

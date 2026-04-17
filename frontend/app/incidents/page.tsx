@@ -6,7 +6,7 @@ import { AuthGate } from "@/components/auth/AuthGate";
 import { IncidentKanban } from "@/components/incidents/IncidentKanban";
 import { IncidentDetail } from "@/components/incidents/IncidentDetail";
 import { PlaybookLibrary } from "@/components/incidents/PlaybookLibrary";
-import { Incident } from "@/lib/types";
+import { Incident, IncidentStatus } from "@/lib/types";
 import { useAuth } from "@/contexts/auth-context";
 import { useViewMode } from "@/contexts/view-mode-context";
 import { apiFetchJson, ApiError, isAbortError } from "@/lib/api";
@@ -25,6 +25,63 @@ function IncidentsPageContent() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [incidentsLoading, setIncidentsLoading] = useState(false);
   const [incidentsError, setIncidentsError] = useState<string | null>(null);
+
+  async function updateIncidentStatus(incidentId: string, status: IncidentStatus) {
+    const current = incidents.find((inc) => inc.id === incidentId);
+    if (!current || current.status === status) return;
+
+    const prevIncidents = incidents;
+    setIncidents((rows) =>
+      rows.map((inc) => (inc.id === incidentId ? { ...inc, status } : inc))
+    );
+    setSelectedIncident((prev) =>
+      prev && prev.id === incidentId ? { ...prev, status } : prev
+    );
+    setIncidentsError(null);
+
+    try {
+      if (isDevMode) {
+        const updated = await apiFetchJson<Incident>(`/api/incidents/${encodeURIComponent(incidentId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            status,
+            assignee: current.assignee,
+            notes: `Status moved to ${status} from kanban drag-drop`,
+          }),
+          devMode: true,
+        });
+        setIncidents((rows) =>
+          rows.map((inc) => (inc.id === incidentId ? updated : inc))
+        );
+        setSelectedIncident((prev) => (prev && prev.id === incidentId ? updated : prev));
+        return;
+      }
+
+      if (!user) throw new Error("No authenticated user");
+      const token = await user.getIdToken();
+      const updated = await apiFetchJson<Incident>(`/api/incidents/${encodeURIComponent(incidentId)}`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          status,
+          assignee: current.assignee,
+          notes: `Status moved to ${status} from kanban drag-drop`,
+        }),
+      });
+      setIncidents((rows) =>
+        rows.map((inc) => (inc.id === incidentId ? updated : inc))
+      );
+      setSelectedIncident((prev) => (prev && prev.id === incidentId ? updated : prev));
+    } catch (e) {
+      setIncidents(prevIncidents);
+      setSelectedIncident((prev) =>
+        prev && prev.id === incidentId ? current : prev
+      );
+      setIncidentsError(
+        e instanceof ApiError ? e.message : "Failed to update incident status"
+      );
+    }
+  }
 
   useEffect(() => {
     if (authLoading) return;
@@ -95,6 +152,7 @@ function IncidentsPageContent() {
                 incidents={incidents}
                 onSelectIncident={setSelectedIncident}
                 loading={incidentsLoading}
+                onMoveIncident={updateIncidentStatus}
               />
             </div>
             <div className="h-[320px]">

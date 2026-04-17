@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useAlertsContext } from '@/contexts/alerts-context';
 import { apiFetchJson, ApiError } from '@/lib/api';
+import { confidencePercent } from '@/lib/alertDisplay';
 
 interface AlertDetailDrawerProps {
   alert: Alert;
@@ -77,6 +78,7 @@ export function AlertDetailDrawer({ alert, onClose }: AlertDetailDrawerProps) {
   }
 
   const alertDisplay = localAlert;
+  const confPct = confidencePercent(alertDisplay.confidence);
 
   const tabs = [
     { id: 'summary', label: 'Summary' },
@@ -121,7 +123,7 @@ export function AlertDetailDrawer({ alert, onClose }: AlertDetailDrawerProps) {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-bg-base border border-border-default p-4 rounded-md">
                 <span className="font-display text-[10px] text-text-muted uppercase tracking-wider block mb-1">Confidence</span>
-                <span className="font-mono text-2xl text-white">{alertDisplay.confidence}%</span>
+                <span className="font-mono text-2xl text-white">{Math.round(confPct * 100) / 100}%</span>
               </div>
               <div className="bg-bg-base border border-border-default p-4 rounded-md">
                 <span className="font-display text-[10px] text-text-muted uppercase tracking-wider block mb-1">Severity</span>

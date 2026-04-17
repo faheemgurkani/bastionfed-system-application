@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { AuthGate } from '@/components/auth/AuthGate';
 import { StorageBucketsPanel } from '@/components/storage/StorageBucketsPanel';
 import { ClientArtifactsSection } from '@/components/storage/ClientArtifactsSection';
@@ -26,15 +26,30 @@ type AnalyzeResult = {
   modelUsed: string;
   dnnAvailable: boolean;
   sha256: string | null;
+  alertId?: string | null;
+  incidentId?: string | null;
+  alertSkippedReason?: string | null;
 };
 
-type InferenceMode = 'image' | 'fv' | 'both';
-
-const MODE_LABELS: Record<InferenceMode, string> = {
-  image: 'Image Only (ResNet)',
-  fv: 'Feature Vector Only (DNN)',
-  both: 'Both Modalities (Meta-Fusion)',
+type RegistryModel = {
+  name: string;
+  type: string;
+  accuracy: number;
+  fpRate: number;
+  size: string;
+  trainedOn: string;
+  description: string;
+  active: boolean;
+  flClientId?: string | null;
+  modelScope?: string;
+  storagePath?: string | null;
 };
+
+const DEV_REGISTRY_MODELS: RegistryModel[] = [
+  { name: 'fl-meta-v1', type: 'fusion', accuracy: 0, fpRate: 0, size: '', trainedOn: '', description: 'Global fusion', active: true, flClientId: null, modelScope: 'global' },
+  { name: 'fl-resnet-v1', type: 'image', accuracy: 0, fpRate: 0, size: '', trainedOn: '', description: 'Global ResNet', active: false, flClientId: null, modelScope: 'global' },
+  { name: 'fl-dnn-v1', type: 'fv', accuracy: 0, fpRate: 0, size: '', trainedOn: '', description: 'Global DNN', active: false, flClientId: null, modelScope: 'global' },
+];
 
 export default function ForensicsPage() {
   const { user, loading: authLoading, isDevMode } = useAuth();
@@ -45,9 +60,10 @@ export default function ForensicsPage() {
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [activeModel, setActiveModel] = useState<string>('fl-meta-v1');
+  const [registryModels, setRegistryModels] = useState<RegistryModel[]>([]);
+  const [selectedInferenceModel, setSelectedInferenceModel] = useState<string>('fl-meta-v1');
+  const [modelsLoadError, setModelsLoadError] = useState<string | null>(null);
 
-  const [mode, setMode] = useState<InferenceMode>('both');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [fvFile, setFvFile] = useState<File | null>(null);
   const [imgDragOver, setImgDragOver] = useState(false);
@@ -55,15 +71,24 @@ export default function ForensicsPage() {
   const imgInputRef = useRef<HTMLInputElement>(null);
   const fvInputRef = useRef<HTMLInputElement>(null);
 
-  const showImage = mode === 'image' || mode === 'both';
-  const showFV = mode === 'fv' || mode === 'both';
+  const inputReq = useMemo(() => {
+    const m = registryModels.find((x) => x.name === selectedInferenceModel);
+    const t = (m?.type || '').toLowerCase();
+    if (t === 'image') return { image: true, fv: false, label: 'Image (ResNet)' };
+    if (t === 'fv') return { image: false, fv: true, label: 'Feature vector (DNN)' };
+    if (t === 'fusion') return { image: true, fv: true, label: 'Fusion (image + / or FV)' };
+    return { image: true, fv: true, label: 'Fusion (image + / or FV)' };
+  }, [registryModels, selectedInferenceModel]);
+
+  const showImage = inputReq.image;
+  const showFV = inputReq.fv;
 
   const hasImage = !!imageFile;
   const hasFV = !!fvFile;
   const canSubmit = !analyzing && (
-    (mode === 'image' && hasImage) ||
-    (mode === 'fv' && hasFV) ||
-    (mode === 'both' && (hasImage || hasFV))
+    (showImage && showFV && (hasImage || hasFV)) ||
+    (showImage && !showFV && hasImage) ||
+    (!showImage && showFV && hasFV)
   );
 
   async function runAnalysis() {
@@ -74,9 +99,10 @@ export default function ForensicsPage() {
       const formData = new FormData();
       if (showImage && imageFile) formData.append('file', imageFile);
       if (showFV && fvFile) formData.append('fv_file', fvFile);
+      const modelParam = encodeURIComponent(selectedInferenceModel);
       const url = isDevMode
-        ? apiUrl('/api/forensics/analyze') + '?dev=true'
-        : apiUrl('/api/forensics/analyze');
+        ? apiUrl('/api/forensics/analyze') + `?dev=true&model=${modelParam}`
+        : apiUrl('/api/forensics/analyze') + `?model=${modelParam}`;
       const headers: Record<string, string> = {};
       if (!isDevMode && user) {
         headers['Authorization'] = `Bearer ${await user.getIdToken()}`;
@@ -108,36 +134,68 @@ export default function ForensicsPage() {
     if (fvInputRef.current) fvInputRef.current.value = '';
   }
 
-  function handleModeChange(newMode: InferenceMode) {
-    setMode(newMode);
-    clearInputs();
-  }
-
   useEffect(() => {
     if (authLoading) return;
     const ac = new AbortController();
-    async function fetchModel() {
+    async function loadModelsAndStatus() {
+      setModelsLoadError(null);
       try {
-        const data = isDevMode
-          ? await apiFetchJson<{ activeModel: string }>('/api/fl/status', { devMode: true, signal: ac.signal })
-          : user
-            ? await apiFetchJson<{ activeModel: string }>('/api/fl/status', {
-                headers: { Authorization: `Bearer ${await user.getIdToken()}` },
-                signal: ac.signal,
-              })
-            : null;
-        if (data) {
-          setActiveModel(data.activeModel);
-          const m = data.activeModel;
-          if (m.includes('resnet')) setMode('image');
-          else if (m.includes('dnn')) setMode('fv');
-          else setMode('both');
+        if (isDevMode) {
+          const statusData = await apiFetchJson<{ activeModel: string }>('/api/fl/status', {
+            devMode: true,
+            signal: ac.signal,
+          });
+          let list = DEV_REGISTRY_MODELS;
+          try {
+            const modelsData = await apiFetchJson<{ models: RegistryModel[] }>('/api/fl/models', {
+              devMode: true,
+              signal: ac.signal,
+            });
+            if (modelsData.models?.length) list = modelsData.models;
+          } catch {
+            /* demo tenant may have empty registry */
+          }
+          setRegistryModels(list);
+          setSelectedInferenceModel((prev) => {
+            if (prev && list.some((x) => x.name === prev)) return prev;
+            const am = statusData.activeModel;
+            if (am && list.some((x) => x.name === am)) return am;
+            return list[0]?.name ?? 'fl-meta-v1';
+          });
+          return;
         }
+        if (!user) {
+          setRegistryModels([]);
+          return;
+        }
+        const token = await user.getIdToken();
+        const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+        const cv = getClientViewIdsForRequests();
+        if (cv) headers['X-Client-View-Ids'] = cv;
+        const [statusData, modelsData] = await Promise.all([
+          apiFetchJson<{ activeModel: string }>('/api/fl/status', { headers, signal: ac.signal }),
+          apiFetchJson<{ models: RegistryModel[] }>('/api/fl/models', { headers, signal: ac.signal }),
+        ]);
+        let list = modelsData.models ?? [];
+        if (!list.length) {
+          list = DEV_REGISTRY_MODELS;
+        }
+        setRegistryModels(list);
+        setSelectedInferenceModel((prev) => {
+          if (prev && list.some((x) => x.name === prev)) return prev;
+          const am = statusData.activeModel;
+          if (am && list.some((x) => x.name === am)) return am;
+          const fusion = list.find((x) => (x.type || '').toLowerCase() === 'fusion');
+          return fusion?.name ?? list[0]?.name ?? prev;
+        });
       } catch (e) {
-        if (!isAbortError(e)) console.warn('Failed to fetch active model', e);
+        if (isAbortError(e)) return;
+        setModelsLoadError(e instanceof ApiError ? e.message : 'Failed to load models');
+        setRegistryModels(DEV_REGISTRY_MODELS);
+        setSelectedInferenceModel('fl-meta-v1');
       }
     }
-    void fetchModel();
+    void loadModelsAndStatus();
     return () => ac.abort();
   }, [authLoading, isDevMode, user, viewScopeKey]);
 
@@ -184,31 +242,49 @@ export default function ForensicsPage() {
         <ClientArtifactsSection />
 
         <div className="border border-white/10 bg-white/[0.02] p-4">
-          {/* Header row: title + active model badge */}
+          {/* Header row: title */}
           <div className="flex items-center justify-between mb-4">
             <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
               FL Model Inference
             </p>
-            <span className="font-mono text-[10px] uppercase tracking-widest px-2 py-1 border border-white/20 bg-white/5 text-white">
-              Active: {activeModel}
-            </span>
           </div>
 
-          {/* Inference Mode Dropdown */}
-          <div className="mb-4">
-            <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground block mb-2">
-              Inference Mode
+          <div className="mb-4 space-y-2">
+            <label className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground block">
+              Model (from registry)
             </label>
             <select
-              value={mode}
-              onChange={(e) => handleModeChange(e.target.value as InferenceMode)}
-              className="bg-bg-surface border border-white/20 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-white/40 cursor-pointer appearance-none w-full max-w-xs"
-              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
+              value={selectedInferenceModel}
+              onChange={(e) => {
+                setSelectedInferenceModel(e.target.value);
+                setImageFile(null);
+                setFvFile(null);
+                setAnalyzeResult(null);
+                setAnalyzeError(null);
+                if (imgInputRef.current) imgInputRef.current.value = '';
+                if (fvInputRef.current) fvInputRef.current.value = '';
+              }}
+              className="bg-bg-surface border border-white/20 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-white/40 cursor-pointer appearance-none w-full max-w-md"
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 12px center',
+              }}
             >
-              <option value="image">{MODE_LABELS.image}</option>
-              <option value="fv">{MODE_LABELS.fv}</option>
-              <option value="both">{MODE_LABELS.both}</option>
+              {registryModels.map((m) => (
+                <option key={m.name} value={m.name}>
+                  {m.name}
+                  {m.flClientId ? ` · ${m.flClientId}` : ''} ({m.type})
+                  {m.active ? ' · active' : ''}
+                </option>
+              ))}
             </select>
+            <p className="font-mono text-[10px] text-muted-foreground">
+              Inputs: {inputReq.label}
+            </p>
+            {modelsLoadError && (
+              <p className="font-mono text-[10px] text-amber-400">{modelsLoadError}</p>
+            )}
           </div>
 
           {/* Upload Zones */}
@@ -362,6 +438,21 @@ export default function ForensicsPage() {
                 <div className="border border-white/10 p-3 col-span-4">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">SHA256</p>
                   <p className="font-mono text-[10px] mt-1 break-all text-muted-foreground">{analyzeResult.sha256}</p>
+                </div>
+              )}
+              {analyzeResult.alertId && (
+                <div className="border border-green-500/40 bg-green-500/5 p-3 col-span-4">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Security alert</p>
+                  <p className="font-mono text-sm text-green-400 mt-1">
+                    Recorded <span className="text-white">{analyzeResult.alertId}</span>
+                    {analyzeResult.incidentId ? ` · Incident ${analyzeResult.incidentId}` : ''} — visible on Alerts.
+                  </p>
+                </div>
+              )}
+              {analyzeResult.alertSkippedReason && (
+                <div className="border border-white/15 bg-white/[0.03] p-3 col-span-4">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Why no new alert</p>
+                  <p className="font-mono text-xs text-muted-foreground mt-1 leading-relaxed">{analyzeResult.alertSkippedReason}</p>
                 </div>
               )}
             </div>

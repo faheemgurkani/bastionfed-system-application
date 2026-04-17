@@ -37,21 +37,6 @@ export default function FLHealthPage() {
                   <div className="h-full bg-white" style={{ width: '52.5%' }} />
                 </div>
               </div>
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-xs text-text-secondary">Byzantine Detections</span>
-                  <span className="font-mono text-xs text-white">2 (this round)</span>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between mb-1">
-                  <span className="text-xs text-text-secondary">DP Budget ε</span>
-                  <span className="font-mono text-xs text-white">0.3 remaining</span>
-                </div>
-                <div className="w-full h-1.5 bg-bg-subtle rounded-full overflow-hidden">
-                  <div className="h-full bg-white" style={{ width: '30%' }} />
-                </div>
-              </div>
             </div>
           </div>
           <DriftTable />

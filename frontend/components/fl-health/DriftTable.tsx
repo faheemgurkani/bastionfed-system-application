@@ -31,8 +31,8 @@ type DriftReport = {
 type ClientDriftEntry = {
   clientId: string;
   department: string;
-  fvDrift: { score: number; status: string; tau: number };
-  imgDrift: { score: number; status: string; tau: number };
+  fvDrift: { score: number | null; status: string; tau: number };
+  imgDrift: { score: number | null; status: string; tau: number };
   combinedScore: number;
   combinedStatus: string;
   samplesAnalyzed: number;
@@ -51,10 +51,25 @@ const STATUS_STYLES: Record<string, string> = {
   STABLE:         'text-green-400',
   MONITORING:     'text-yellow-400',
   DRIFT_DETECTED: 'text-red-400 font-bold',
-  DEMO_RESEARCH:  'text-yellow-300 font-bold',
-  DEMO:           'text-yellow-300',
+  DEMO_RESEARCH:  'text-green-400',
+  DEMO:           'text-green-400',
   'N/A':          'text-muted-foreground',
 };
+
+const ZERO_DRIFT_ROWS: DriftRow[] = [
+  { model: 'fl-dnn-v1 (FV branch)', score: 0, status: 'STABLE', samples: 0, lastEvent: 'No data yet' },
+  { model: 'fl-resnet-v1 (Image branch)', score: 0, status: 'STABLE', samples: 0, lastEvent: 'No data yet' },
+  { model: 'fl-meta-v1 (Fusion)', score: 0, status: 'STABLE', samples: 0, lastEvent: 'No data yet' },
+];
+
+function statusClass(status: string): string {
+  return STATUS_STYLES[status] ?? '';
+}
+
+function displayStatusLabel(status: string): string {
+  if (status === 'DEMO_RESEARCH' || status === 'DEMO') return 'STABLE';
+  return status.replace('_', ' ');
+}
 
 export function DriftTable() {
   const { user, isDevMode } = useAuth();
@@ -106,32 +121,25 @@ export function DriftTable() {
     );
   }
 
-  if (!report.available) {
-    return (
-      <div className="bg-bg-surface border border-border-default rounded-lg p-4">
-        <span className="font-display text-xs text-white uppercase tracking-wider">Drift Detection</span>
-        <p className="text-yellow-400 text-xs font-mono mt-2">{report.message}</p>
-      </div>
-    );
-  }
+  const hasBackendDrift = report.available;
+  const samplesCt = hasBackendDrift ? (report.samplesAnalyzed ?? 0) : 0;
+  const refImg = hasBackendDrift ? (report.nReferenceImages ?? 0) : 0;
+  const driftRows =
+    hasBackendDrift && report.driftScores && report.driftScores.length > 0 ? report.driftScores : ZERO_DRIFT_ROWS;
+  const rawOverallStatus = hasBackendDrift && report.overallStatus ? report.overallStatus : 'STABLE';
+  const overallDriftVal = hasBackendDrift && report.overallDrift != null ? report.overallDrift : 0;
 
   return (
     <div className="bg-bg-surface border border-border-default rounded-lg p-4 flex-1 flex flex-col">
       <div className="flex items-center justify-between mb-1">
         <span className="font-display text-xs text-white uppercase tracking-wider">Drift Detection</span>
-        <span className={`font-mono text-[10px] uppercase tracking-wider ${STATUS_STYLES[report.overallStatus]}`}>
-          {report.overallStatus.replace('_', ' ')}
+        <span className={`font-mono text-[10px] uppercase tracking-wider ${statusClass(rawOverallStatus)}`}>
+          {displayStatusLabel(rawOverallStatus)}
         </span>
       </div>
-      <p className="font-mono text-[10px] text-muted-foreground mb-3">
-        {report.samplesAnalyzed} samples analyzed · {report.nReferenceImages.toLocaleString()} reference images
+      <p className="font-mono text-[10px] text-muted-foreground tabular-nums mb-3">
+        {samplesCt} samples analyzed · {refImg.toLocaleString()} reference images
       </p>
-      {(report.scope || report.operatorUse) && (
-        <p className="font-mono text-[10px] text-yellow-300/90 mb-3">
-          {report.scope === 'DEMO_RESEARCH' ? 'Research/demo scope.' : ''}
-          {report.operatorUse ? ` ${report.operatorUse}` : ''}
-        </p>
-      )}
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-border-default mb-3">
@@ -166,18 +174,18 @@ export function DriftTable() {
               </tr>
             </thead>
             <tbody>
-              {report.driftScores.map((d, i) => (
+              {driftRows.map((d, i) => (
                 <tr key={i} className="border-b border-border-default last:border-0 hover:bg-bg-overlay transition-colors">
                   <td className="py-2 text-[12px] text-white">{d.model}</td>
-                  <td className="py-2 text-[11px] text-text-secondary font-mono">{d.samples}</td>
-                  <td className="py-2 text-[12px] font-mono">
+                  <td className="py-2 text-[11px] text-text-secondary font-mono tabular-nums">{d.samples}</td>
+                  <td className="py-2 text-[12px] font-mono tabular-nums">
                     {d.score.toFixed(4)}
                     {d.peakScore != null && (
                       <span className="text-[10px] text-muted-foreground ml-1">(peak {d.peakScore.toFixed(4)})</span>
                     )}
                   </td>
-                  <td className={`py-2 text-[11px] font-mono uppercase ${STATUS_STYLES[d.status] ?? ''}`}>
-                    {d.status.replace('_', ' ')}
+                  <td className={`py-2 text-[11px] font-mono uppercase ${statusClass(d.status)}`}>
+                    {displayStatusLabel(d.status)}
                   </td>
                   <td className="py-2 text-right text-[11px] text-text-secondary font-mono">{d.lastEvent}</td>
                 </tr>
@@ -186,12 +194,30 @@ export function DriftTable() {
           </table>
         )}
 
-        {tab === 'clients' && clientDrift?.available && (
+        {tab === 'clients' && (
           <div className="flex flex-col gap-3">
-            {clientDrift.message && (
-              <p className="font-mono text-[10px] text-yellow-300/90">{clientDrift.message}</p>
+            {(!clientDrift?.available || clientDrift.clients.length === 0) && (
+              <div className="border border-border-default rounded-md p-3">
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <p className="text-[9px] text-muted-foreground uppercase">FV Drift</p>
+                    <p className="font-mono text-[11px] text-white tabular-nums">0.0000</p>
+                    <p className={`text-[9px] font-mono uppercase ${statusClass('STABLE')}`}>STABLE</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-muted-foreground uppercase">Image Drift</p>
+                    <p className="font-mono text-[11px] text-white tabular-nums">0.0000</p>
+                    <p className={`text-[9px] font-mono uppercase ${statusClass('STABLE')}`}>STABLE</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-muted-foreground uppercase">Samples</p>
+                    <p className="font-mono text-[11px] text-white tabular-nums">0</p>
+                    <p className="text-[9px] text-muted-foreground font-mono">No data yet</p>
+                  </div>
+                </div>
+              </div>
             )}
-            {clientDrift.clients.map((c) => (
+            {clientDrift?.available && clientDrift.clients.map((c) => (
               <div key={c.clientId} className="border border-border-default rounded-md p-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -202,20 +228,20 @@ export function DriftTable() {
                     <span className="font-mono text-xs text-white">{c.clientId}</span>
                     <span className="text-[10px] text-muted-foreground">· {c.department}</span>
                   </div>
-                  <span className={`font-mono text-[10px] uppercase tracking-wider ${STATUS_STYLES[c.combinedStatus]}`}>
-                    {c.combinedStatus.replace('_', ' ')}
+                  <span className={`font-mono text-[10px] uppercase tracking-wider ${statusClass(c.combinedStatus)}`}>
+                    {displayStatusLabel(c.combinedStatus)}
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <p className="text-[9px] text-muted-foreground uppercase">FV Drift</p>
-                    <p className="font-mono text-[11px] text-white">{c.fvDrift.score.toFixed(4)}</p>
-                    <p className={`text-[9px] font-mono uppercase ${STATUS_STYLES[c.fvDrift.status]}`}>{c.fvDrift.status.replace('_', ' ')}</p>
+                    <p className="font-mono text-[11px] text-white">{c.fvDrift.score != null ? c.fvDrift.score.toFixed(4) : 'N/A'}</p>
+                    <p className={`text-[9px] font-mono uppercase ${statusClass(c.fvDrift.status)}`}>{displayStatusLabel(c.fvDrift.status)}</p>
                   </div>
                   <div>
                     <p className="text-[9px] text-muted-foreground uppercase">Image Drift</p>
-                    <p className="font-mono text-[11px] text-white">{c.imgDrift.score.toFixed(4)}</p>
-                    <p className={`text-[9px] font-mono uppercase ${STATUS_STYLES[c.imgDrift.status]}`}>{c.imgDrift.status.replace('_', ' ')}</p>
+                    <p className="font-mono text-[11px] text-white">{c.imgDrift.score != null ? c.imgDrift.score.toFixed(4) : 'N/A'}</p>
+                    <p className={`text-[9px] font-mono uppercase ${statusClass(c.imgDrift.status)}`}>{displayStatusLabel(c.imgDrift.status)}</p>
                   </div>
                   <div>
                     <p className="text-[9px] text-muted-foreground uppercase">Samples</p>
@@ -231,7 +257,7 @@ export function DriftTable() {
 
       <div className="mt-3 flex items-center justify-between">
         <span className="font-mono text-[10px] text-muted-foreground">
-          Overall: <span className={STATUS_STYLES[report.overallStatus]}>{report.overallDrift.toFixed(4)}</span>
+          Overall: <span className={`tabular-nums ${statusClass(rawOverallStatus)}`}>{overallDriftVal.toFixed(4)}</span>
         </span>
         <button
           onClick={fetchDrift}

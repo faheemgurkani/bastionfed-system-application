@@ -254,3 +254,19 @@ def scoped_fl_client_ids(auth: AuthContext) -> list[str] | None:
     if auth.fl_client_ids is None:
         return None
     return sorted(auth.fl_client_ids)
+
+
+def alert_list_fl_scope(auth: AuthContext) -> list[str] | None:
+    """FL scope for /api/alerts: owner/admin see full tenant (ignore X-Client-View-Ids); client_user only their FL clients."""
+    if auth.mode == "dev":
+        return None
+    if auth.role in ("owner", "admin"):
+        return None
+    if auth.role == "client_user":
+        ids = auth.fl_client_ids
+        if not ids:
+            return []
+        return sorted(ids)
+    if auth.fl_client_ids is None:
+        return None
+    return sorted(auth.fl_client_ids)

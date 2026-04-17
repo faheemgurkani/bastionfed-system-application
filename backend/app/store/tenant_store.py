@@ -479,6 +479,26 @@ class MemoryTenantStore:
             )
         return updated
 
+    def create_forensic_alert(
+        self,
+        tenant_id: str,
+        *,
+        fl_client_id: str,
+        confidence: float,
+        threat_score: float,
+        model_used: str,
+        actor_uid: str,
+        filename: str | None = None,
+    ) -> tuple[str, str | None, str | None, str | None]:
+        return self._snapshot(tenant_id).create_forensic_alert(
+            fl_client_id=fl_client_id,
+            confidence=confidence,
+            threat_score=threat_score,
+            model_used=model_used,
+            actor_uid=actor_uid,
+            filename=filename,
+        )
+
     def list_devices(self, tenant_id: str, **kwargs: Any) -> list[Device]:
         fl_ids = kwargs.pop("fl_client_ids", None)
         if fl_ids is not None and not fl_ids:
@@ -1208,6 +1228,29 @@ class MemoryTenantStore:
         )
 
 
+def model_registry_payload_visible_for_fl_scope(m: dict[str, Any], fl_client_ids: list[str] | None) -> bool:
+    """Same rules as PostgresTenantStore.fl_models_dict filtering (API + inference auth)."""
+    if fl_client_ids is None:
+        return True
+    allow = set(fl_client_ids)
+    fid = m.get("flClientId")
+    if fid is None or str(fid) in allow or m.get("modelScope") == "global":
+        return True
+    return False
+
+
+def _fl_client_row_to_model(row: dict[str, Any]) -> FLClient:
+    """Postgres may store status/client_type in lowercase; FLClient enums expect uppercase."""
+    data = dict(row)
+    allowed_st = {e.value for e in FLClientStatus}
+    st = str(data.get("status") or "").strip().upper()
+    data["status"] = st if st in allowed_st else FLClientStatus.OFFLINE.value
+    allowed_ct = {e.value for e in FLClientType}
+    ct = str(data.get("client_type") or "").strip().upper()
+    data["client_type"] = ct if ct in allowed_ct else FLClientType.DEVICE.value
+    return FLClient.model_validate(data)
+
+
 class PostgresTenantStore:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
@@ -1519,7 +1562,7 @@ class PostgresTenantStore:
             rows = cur.fetchall()
             device_ids = [str(row["device_id"]) for row in rows]
             devices = self._devices_map(cur, tenant_id, device_ids)
-        items = [self._alert_from_row(row, devices[str(row["device_id"])]) for row in rows]
+        items = [self._alert_from_row(row, devices.get(str(row["device_id"]))) for row in rows]
         next_cursor = _encode_cursor(start + limit) if (start + limit) < total else None
         return items, next_cursor, total
 
@@ -1594,7 +1637,8 @@ class PostgresTenantStore:
             params.append(fl_client_ids)
         # Only return devices whose fl_client is DEVICE-type — PERSON clients have no IoT devices
         clauses.append(
-            "EXISTS (SELECT 1 FROM fl_clients fc WHERE fc.tenant_id = d.tenant_id AND fc.id = d.fl_client_id AND fc.client_type = 'DEVICE')"
+            "EXISTS (SELECT 1 FROM fl_clients fc WHERE fc.tenant_id = d.tenant_id AND fc.id = d.fl_client_id "
+            "AND UPPER(TRIM(fc.client_type::text)) = 'DEVICE')"
         )
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
@@ -1839,7 +1883,7 @@ class PostgresTenantStore:
             row = cur.fetchone()
         if not row:
             return None
-        cl = FLClient.model_validate(row)
+        cl = _fl_client_row_to_model(row)
         if fl_client_ids is not None:
             if not fl_client_ids or cl.id not in fl_client_ids:
                 return None
@@ -1867,7 +1911,7 @@ class PostgresTenantStore:
             else:
                 cur.execute("SELECT * FROM fl_clients WHERE tenant_id = %s ORDER BY id ASC", (tenant_id,))
                 rows = cur.fetchall()
-        return [FLClient.model_validate(row) for row in rows]
+        return [_fl_client_row_to_model(row) for row in rows]
 
     def patch_fl_client(self, tenant_id: str, client_id: str, *, client_type: FLClientType) -> FLClient | None:
         now = _now_iso()
@@ -1885,7 +1929,7 @@ class PostgresTenantStore:
             conn.commit()
         if not row:
             return None
-        return FLClient.model_validate(row)
+        return _fl_client_row_to_model(row)
 
     def create_fl_client(
         self,
@@ -1916,7 +1960,7 @@ class PostgresTenantStore:
             row = cur.fetchone()
             conn.commit()
         if row:
-            return FLClient.model_validate(row)
+            return _fl_client_row_to_model(row)
         # Conflict — fetch existing
         existing = self.get_fl_client(tenant_id, client_id)
         if existing:
@@ -2073,13 +2117,68 @@ class PostgresTenantStore:
             rows = cur.fetchall()
         models = [self._model_registry_payload(row) for row in rows]
         if fl_client_ids is not None:
-            allow = set(fl_client_ids)
-            models = [
-                m
-                for m in models
-                if m.get("flClientId") is None or str(m.get("flClientId")) in allow or m.get("modelScope") == "global"
-            ]
+            models = [m for m in models if model_registry_payload_visible_for_fl_scope(m, fl_client_ids)]
         return {"models": models}
+
+    def get_model_registry_payload_by_name(self, tenant_id: str, name: str) -> dict[str, Any] | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT * FROM model_registry WHERE tenant_id = %s AND name = %s", (tenant_id, name))
+            row = cur.fetchone()
+        if not row:
+            return None
+        return self._model_registry_payload(row)
+
+    def list_registry_bundle_payloads(self, tenant_id: str, fl_client_id: str | None) -> list[dict[str, Any]]:
+        """fusion + image + fv rows for one FL client (or global when fl_client_id is None)."""
+        with self._connect() as conn, conn.cursor() as cur:
+            if fl_client_id is None:
+                cur.execute(
+                    """
+                    SELECT * FROM model_registry
+                    WHERE tenant_id = %s AND fl_client_id IS NULL
+                      AND LOWER(model_type) IN ('fusion', 'image', 'fv')
+                    ORDER BY LOWER(model_type)
+                    """,
+                    (tenant_id,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT * FROM model_registry
+                    WHERE tenant_id = %s AND fl_client_id = %s
+                      AND LOWER(model_type) IN ('fusion', 'image', 'fv')
+                    ORDER BY LOWER(model_type)
+                    """,
+                    (tenant_id, fl_client_id),
+                )
+            rows = cur.fetchall()
+        return [self._model_registry_payload(r) for r in rows]
+
+    def resolve_inference_registry_payloads(self, tenant_id: str, model_name: str) -> list[dict[str, Any]] | None:
+        """
+        Payloads needed to run inference for a registry model name.
+        Fusion → up to three rows (image, fv, fusion); image/fv → single row.
+        Returns None if the primary row is missing, storage_path missing, or fusion bundle incomplete.
+        """
+        primary = self.get_model_registry_payload_by_name(tenant_id, model_name)
+        if not primary:
+            return None
+        if not (primary.get("storagePath") or "").strip():
+            return None
+        mt = str(primary.get("type") or "").lower()
+        fid = primary.get("flClientId")
+        fl_cid: str | None = str(fid) if fid else None
+
+        if mt == "fusion":
+            bundle = self.list_registry_bundle_payloads(tenant_id, fl_cid)
+            by_t = {str(p.get("type") or "").lower(): p for p in bundle}
+            need = ("fv", "image", "fusion")
+            if not all(t in by_t and (by_t[t].get("storagePath") or "").strip() for t in need):
+                return None
+            return [by_t["image"], by_t["fv"], by_t["fusion"]]
+        if mt in ("image", "fv"):
+            return [primary]
+        return [primary]
 
     def activate_fl_model(
         self,
@@ -2559,6 +2658,168 @@ class PostgresTenantStore:
             conn.commit()
         return incident
 
+    def create_forensic_alert(
+        self,
+        tenant_id: str,
+        *,
+        fl_client_id: str,
+        confidence: float,
+        threat_score: float,
+        model_used: str,
+        actor_uid: str,
+        filename: str | None = None,
+    ) -> tuple[str, str | None, str | None, str | None]:
+        """
+        Insert an alert (and optionally an incident) for a forensic ML detection.
+        Returns (alert_id, incident_id | None, device_id | None, device_display_name | None).
+        """
+        now = _now_iso()
+        alert_id = f"ALT-F-{int(time.time() * 1000)}"
+
+        # Map threat score to severity
+        if threat_score >= 85:
+            severity = "CRITICAL"
+        elif threat_score >= 70:
+            severity = "HIGH"
+        elif threat_score >= 50:
+            severity = "MEDIUM"
+        else:
+            severity = "LOW"
+
+        # Pick the first device belonging to this fl_client; if none, auto-provision one (realistic name for alerts/UI)
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT id FROM devices WHERE tenant_id = %s AND fl_client_id = %s LIMIT 1",
+                (tenant_id, fl_client_id),
+            )
+            dev_row = cur.fetchone()
+            device_id: str
+            device_display_name: str
+
+            if dev_row:
+                device_id = str(dev_row["id"])
+                cur.execute(
+                    "SELECT name FROM devices WHERE tenant_id = %s AND id = %s",
+                    (tenant_id, device_id),
+                )
+                nr = cur.fetchone()
+                device_display_name = str(nr["name"]) if nr else "Clinical workstation"
+            else:
+                cur.execute(
+                    "SELECT node_name, department FROM fl_clients WHERE tenant_id = %s AND id = %s",
+                    (tenant_id, fl_client_id),
+                )
+                fc = cur.fetchone()
+                node = str(fc.get("node_name") or "").strip() if fc else ""
+                dept = str(fc.get("department") or "").strip() if fc else ""
+                label = node or dept or "Clinical"
+                if len(label) > 80:
+                    label = label[:80]
+                device_display_name = f"{label} — Clinical workstation"
+                dev_auto_id = f"auto-dev-{fl_client_id}"
+                cur.execute(
+                    """
+                    INSERT INTO devices (
+                        tenant_id, id, name, ip, type, wing, criticality,
+                        fl_client_id, status, source_type, source_ref, ingested_at,
+                        is_demo, created_at, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (tenant_id, id) DO NOTHING
+                    """,
+                    (
+                        tenant_id,
+                        dev_auto_id,
+                        device_display_name,
+                        "0.0.0.0",
+                        "Clinical",
+                        dept or "General",
+                        4,
+                        fl_client_id,
+                        DeviceStatus.NORMAL.value,
+                        "FORENSIC_AUTO",
+                        "create_forensic_alert",
+                        now,
+                        False,
+                        now,
+                        now,
+                    ),
+                )
+                cur.execute(
+                    "SELECT id, name FROM devices WHERE tenant_id = %s AND fl_client_id = %s LIMIT 1",
+                    (tenant_id, fl_client_id),
+                )
+                dev_row = cur.fetchone()
+                if dev_row:
+                    device_id = str(dev_row["id"])
+                    device_display_name = str(dev_row["name"])
+                else:
+                    device_id = "unknown"
+                    device_display_name = "Unknown Device"
+
+            summary = f"ML forensic scan detected malware — {filename or 'uploaded file'} (score {threat_score:.1f}%)"
+            cur.execute(
+                """
+                INSERT INTO alerts
+                    (tenant_id, id, timestamp, device_id, type, tactic, technique_json,
+                     severity, confidence, status, model_version, threat_intel_json,
+                     cve_reference, feature_summary, source_type, source_ref,
+                     ingested_at, is_demo, created_by, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,FALSE,%s,%s,%s)
+                ON CONFLICT (tenant_id, id) DO NOTHING
+                """,
+                (
+                    tenant_id, alert_id, now, device_id,
+                    "ML Malware Detection", "Execution",
+                    Json({"id": "T1204", "tactic": "Execution", "name": "User Execution"}),
+                    severity, round(confidence / 100, 4), AlertStatus.OPEN.value,
+                    model_used, Json([]),
+                    None, summary,
+                    "FORENSIC", actor_uid,
+                    now, actor_uid, now, now,
+                ),
+            )
+
+            incident_id: str | None = None
+            if threat_score >= 85:
+                incident_id = f"INC-F-{int(time.time() * 1000)}"
+                playbook = {
+                    "id": f"pb-{incident_id}", "name": "Forensic Malware Response",
+                    "trigger_condition": "FORENSIC", "last_run": now,
+                    "executions": 0, "status": "DRAFT", "steps": [],
+                }
+                cur.execute(
+                    """
+                    INSERT INTO incidents
+                        (tenant_id, id, title, severity, status, affected_device_ids_json,
+                         time_open, analyst_initials, playbook_json, ticket_id, reporter,
+                         assignee, priority, created, labels_json, source_type, source_ref,
+                         ingested_at, is_demo, created_by, created_at, updated_at)
+                    VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s::jsonb,%s,%s,%s,%s,%s,%s::jsonb,%s,%s,%s,FALSE,%s,%s,%s)
+                    ON CONFLICT (tenant_id, id) DO NOTHING
+                    """,
+                    (
+                        tenant_id, incident_id,
+                        f"Malware detected via forensic scan — {filename or 'uploaded file'}",
+                        severity, "NEW",
+                        Json([device_id]), "0m", "ML",
+                        Json(playbook), incident_id, actor_uid,
+                        "Unassigned", "P1" if severity == "CRITICAL" else "P2",
+                        now, Json(["forensic", "ml-detection"]),
+                        "FORENSIC", actor_uid, now, actor_uid, now, now,
+                    ),
+                )
+                self._insert_incident_event(
+                    cur, tenant_id=tenant_id, incident_id=incident_id,
+                    event=IncidentEvent(
+                        id=f"ev-{int(time.time() * 1000)}", timestamp=now,
+                        type="ALERT", description=summary,
+                    ),
+                )
+
+            conn.commit()
+        return alert_id, incident_id, device_id, device_display_name
+
     def get_sample(self, tenant_id: str, sample_id: str, *, fl_client_ids: list[str] | None = None) -> MalwareSample | None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT * FROM malware_samples WHERE tenant_id = %s AND id = %s", (tenant_id, sample_id))
@@ -2806,10 +3067,10 @@ class PostgresTenantStore:
                 sub_params.append(scope_firebase_uid)
             if sub:
                 joiner = " OR ".join(sub)
-                clauses.append(f"AND ({joiner})")
+                clauses.append(f"({joiner})")
                 params.extend(sub_params)
             elif fl_client_ids is not None and not fl_client_ids:
-                clauses.append("AND FALSE")
+                clauses.append("FALSE")
         where_sql = " AND ".join(clauses)
         start = _decode_cursor(cursor)
         with self._connect() as conn, conn.cursor() as cur:
@@ -2862,10 +3123,10 @@ class PostgresTenantStore:
                     sub.append("al.actor_firebase_uid = %s")
                     sub_params.append(scope_firebase_uid)
                 if sub:
-                    clauses.append(f"AND ({' OR '.join(sub)})")
+                    clauses.append(f"({' OR '.join(sub)})")
                     params.extend(sub_params)
                 elif fl_client_ids is not None and not fl_client_ids:
-                    clauses.append("AND FALSE")
+                    clauses.append("FALSE")
                 where_sql = " AND ".join(clauses)
                 cur.execute(
                     f"""
@@ -3136,7 +3397,7 @@ class PostgresTenantStore:
 
     def _alert_from_row(self, row: dict[str, Any], device: Device | None) -> Alert:
         if device is None:
-            raise ValueError(f"Missing device for alert {row['id']}")
+            device = Device(id=str(row["device_id"]), name="Unknown Device", ip="0.0.0.0", type="unknown", wing="N/A", criticality=0, fl_client_id="", status=DeviceStatus.NORMAL, source_type=None, source_ref=None, ingested_at=None, is_demo=False)
         return Alert(id=str(row["id"]), timestamp=str(row["timestamp"]), device_id=str(row["device_id"]), device=device, type=str(row["type"]), tactic=str(row["tactic"]), technique=row["technique_json"], severity=Severity(str(row["severity"])), confidence=float(row["confidence"]), status=AlertStatus(str(row["status"])), model_version=str(row["model_version"]), threat_intel=row["threat_intel_json"], cve_reference=row["cve_reference"], feature_summary=str(row["feature_summary"]), source_type=row.get("source_type"), source_ref=row.get("source_ref"), ingested_at=row.get("ingested_at"), is_demo=bool(row.get("is_demo", False)))
 
     def _incident_events_by_incident(self, cur: Any, tenant_id: str, incident_ids: list[str]) -> dict[str, list[IncidentEvent]]:
@@ -3151,13 +3412,45 @@ class PostgresTenantStore:
     def _incident_from_row(self, row: dict[str, Any], devices: dict[str, Device], timeline: list[IncidentEvent]) -> Incident:
         device_ids = list(row["affected_device_ids_json"] or [])
         playbook = Playbook.model_validate(row["playbook_json"])
+        created_raw = str(row.get("created") or "")
+        computed_time_open = str(row.get("time_open") or "1m")
+        try:
+            created_dt = _norm_iso(created_raw) if created_raw else datetime.now(timezone.utc)
+            now_dt = datetime.now(timezone.utc)
+            minutes_open = max(1, int((now_dt - created_dt).total_seconds() // 60))
+            computed_time_open = f"{minutes_open}m"
+        except Exception:
+            computed_time_open = str(row.get("time_open") or "1m")
+
+        affected_devices: list[Device] = []
+        for device_id in device_ids:
+            if device_id in devices:
+                affected_devices.append(devices[device_id])
+            else:
+                affected_devices.append(
+                    Device(
+                        id=str(device_id),
+                        name="Unknown Device",
+                        ip="0.0.0.0",
+                        type="unknown",
+                        wing="N/A",
+                        criticality=0,
+                        fl_client_id="",
+                        status=DeviceStatus.NORMAL,
+                        source_type=None,
+                        source_ref=None,
+                        ingested_at=None,
+                        is_demo=False,
+                    )
+                )
+
         return Incident(
             id=str(row["id"]),
             title=str(row["title"]),
             severity=Severity(str(row["severity"])),
             status=IncidentStatus(str(row["status"])),
-            affected_devices=[devices[device_id] for device_id in device_ids if device_id in devices],
-            time_open=str(row["time_open"]),
+            affected_devices=affected_devices,
+            time_open=computed_time_open,
             analyst_initials=str(row["analyst_initials"]),
             timeline=timeline,
             playbook=playbook,
@@ -3355,6 +3648,13 @@ _impl: TenantStore = MemoryTenantStore()
 class _TenantStoreProxy:
     def __getattr__(self, name: str):
         return getattr(_impl, name)
+
+    def __class_getitem__(cls, item):
+        return _impl.__class_getitem__(item)
+
+    @property
+    def __class__(self):  # type: ignore[override]
+        return _impl.__class__
 
 
 tenant_store = _TenantStoreProxy()

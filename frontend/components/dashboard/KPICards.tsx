@@ -62,7 +62,10 @@ export function KPICards() {
   }, [authLoading, isDevMode, user, sessionReady, viewScopeKey]);
 
   const activeThreats = kpis?.activeThreats ?? '—';
-  const avgConfidence = kpis != null ? kpis.avgConfidence.toFixed(1) : '—';
+  const avgConfidencePct = kpis != null
+    ? Math.min(100, Math.max(0, kpis.avgConfidence <= 1 ? kpis.avgConfidence * 100 : kpis.avgConfidence))
+    : null;
+  const avgConfidence = avgConfidencePct != null ? avgConfidencePct.toFixed(1) : '—';
   const devicesWatch = kpis?.devicesUnderWatch ?? '—';
   const flRound = kpis != null ? `${kpis.flRound} / 100` : '—';
 
@@ -98,13 +101,13 @@ export function KPICards() {
       </div>
 
       <div className="bg-bg-surface border border-border-default rounded-lg p-4 flex flex-col justify-between">
-        <span className="font-display text-xs text-text-muted uppercase tracking-wider">Avg Detection Confidence</span>
+        <span className="font-display text-xs text-text-muted uppercase tracking-wider">Detection Signal</span>
         <div className="mt-2 flex flex-col gap-2">
           <span className="font-mono text-3xl text-white">{avgConfidence}%</span>
           <div className="w-full h-1 bg-bg-subtle rounded-full overflow-hidden">
             <div
               className="h-full bg-white"
-              style={{ width: `${kpis != null ? Math.min(100, kpis.avgConfidence) : 0}%` }}
+              style={{ width: `${avgConfidencePct ?? 0}%` }}
             />
           </div>
         </div>

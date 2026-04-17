@@ -9,7 +9,8 @@ from app.errors import api_error
 from app.models.api import MalwareSampleListResponse
 from app.models.domain import MalwareSample, RCAReport
 from app.services.supabase_storage import create_signed_download_url, parse_bucket_and_object
-from app.store.tenant_store import tenant_store
+from app.ml.inference import LEGACY_GLOBAL_MODEL_NAMES
+from app.store.tenant_store import PostgresTenantStore, model_registry_payload_visible_for_fl_scope, tenant_store
 
 router = APIRouter(tags=["forensics"])
 
@@ -229,6 +230,113 @@ def expire_sample(
     if not sample:
         raise api_error(status.HTTP_404_NOT_FOUND, "Sample not found", "SAMPLE_NOT_FOUND")
     return sample
+
+
+@router.post("/forensics/analyze", response_model=dict)
+async def analyze_file(
+    auth: Annotated[AuthContext, Depends(require_read_auth)],
+    file: UploadFile | None = File(None),
+    fv_file: UploadFile | None = File(None),
+    model: str = Query(default="fl-meta-v1"),
+):
+    from app.ml.inference import predict_from_image
+    from app.sse_bus import publish_alert
+    import json
+
+    if not auth.tenant_id:
+        raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
+
+    image_bytes = await file.read() if file else None
+    filename = file.filename if file else None
+    feature_vector = None
+    if fv_file:
+        raw = await fv_file.read()
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            feature_vector = [float(x) for x in parsed]
+        elif isinstance(parsed, dict) and "features" in parsed:
+            feature_vector = [float(x) for x in parsed["features"]]
+
+    fl_scope = scoped_fl_client_ids(auth)
+    inference_tenant_id: str | None = auth.tenant_id if isinstance(tenant_store, PostgresTenantStore) else None
+    row: dict | None = None
+    if isinstance(tenant_store, PostgresTenantStore):
+        row = tenant_store.get_model_registry_payload_by_name(auth.tenant_id, model)
+        if row is None:
+            if model not in LEGACY_GLOBAL_MODEL_NAMES:
+                raise api_error(status.HTTP_404_NOT_FOUND, "Unknown model", "MODEL_NOT_FOUND")
+        elif auth.role not in ("owner", "admin") and not model_registry_payload_visible_for_fl_scope(row, fl_scope):
+            raise api_error(status.HTTP_403_FORBIDDEN, "Model not allowed for this principal", "MODEL_NOT_ALLOWED")
+
+    inference_fl_client_id: str | None = None
+    if row and row.get("flClientId"):
+        inference_fl_client_id = str(row["flClientId"])
+    elif fl_scope:
+        inference_fl_client_id = sorted(fl_scope)[0]
+    else:
+        devs = tenant_store.list_devices(auth.tenant_id)
+        inference_fl_client_id = devs[0].fl_client_id if devs else None
+
+    result = predict_from_image(
+        image_bytes=image_bytes,
+        feature_vector=feature_vector,
+        model_name=model,
+        fl_client_id=inference_fl_client_id,
+        tenant_id=inference_tenant_id,
+    )
+    result["sha256"] = None
+    result["alertId"] = None
+    result["incidentId"] = None
+    result["alertSkippedReason"] = None
+
+    if result["prediction"] == "MALWARE" and inference_fl_client_id:
+        alert_id, incident_id, forensic_device_id, forensic_device_name = tenant_store.create_forensic_alert(
+            auth.tenant_id,
+            fl_client_id=inference_fl_client_id,
+            confidence=result["confidence"],
+            threat_score=result["threatScore"],
+            model_used=model,
+            actor_uid=auth.uid or "unknown",
+            filename=filename,
+        )
+        result["alertId"] = alert_id or None
+        result["incidentId"] = incident_id
+        if forensic_device_id:
+            result["deviceId"] = forensic_device_id
+        if forensic_device_name:
+            result["deviceName"] = forensic_device_name
+        if not alert_id:
+            result["alertSkippedReason"] = (
+                "Model predicted MALWARE but no alert row was stored (tenant has no device to attach)."
+            )
+        else:
+            sse_payload = {
+                "type": "FORENSIC_ALERT",
+                "alertId": alert_id,
+                "incidentId": incident_id,
+                "prediction": result["prediction"],
+                "threatScore": result["threatScore"],
+                "modelUsed": model,
+                "flClientId": inference_fl_client_id,
+            }
+            if forensic_device_id:
+                sse_payload["deviceId"] = forensic_device_id
+            if forensic_device_name:
+                sse_payload["deviceName"] = forensic_device_name
+            await publish_alert(auth.tenant_id, sse_payload)
+    elif result["prediction"] == "MALWARE" and not inference_fl_client_id:
+        result["alertSkippedReason"] = (
+            "MALWARE verdict but no FL client could be attached (missing scope). "
+            "Use client-scoped access or admin client view with a selected FL client."
+        )
+    else:
+        result["alertSkippedReason"] = (
+            f"No alert: sample classified as {result['prediction']}. "
+            "Alerts are only created for MALWARE (malware probability ≥ 50%). "
+            "Drift scores on FL Health measure embedding shift vs training; they are not the malware verdict."
+        )
+
+    return result
 
 
 class BlockIPRequest(BaseModel):

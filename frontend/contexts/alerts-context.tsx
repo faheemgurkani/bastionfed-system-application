@@ -22,6 +22,17 @@ export type AlertsContextValue = {
 
 const AlertsContext = createContext<AlertsContextValue | undefined>(undefined);
 
+function isFullAlertPayload(data: unknown): data is Alert {
+  if (!data || typeof data !== 'object') return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.id === 'string' &&
+    typeof d.timestamp === 'string' &&
+    typeof d.device === 'object' &&
+    d.device !== null
+  );
+}
+
 export function AlertsProvider({ children }: { children: React.ReactNode }) {
   const { user, loading: authLoading, isDevMode, sessionReady } = useAuth();
   const { viewScopeKey } = useViewMode();
@@ -32,6 +43,28 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
   const replaceAlert = useCallback((updated: Alert) => {
     setAlerts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
   }, []);
+
+  const fetchAlertsList = useCallback(
+    async (signal?: AbortSignal): Promise<Alert[] | null> => {
+      if (isDevMode) {
+        const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
+          devMode: true,
+          signal,
+        });
+        return data.items;
+      }
+      if (user && sessionReady) {
+        const token = await user.getIdToken();
+        const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
+          headers: { Authorization: `Bearer ${token}` },
+          signal,
+        });
+        return data.items;
+      }
+      return null;
+    },
+    [isDevMode, sessionReady, user]
+  );
 
   // Initial load: GET /api/alerts
   useEffect(() => {
@@ -44,24 +77,13 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       setAlertsLoading(true);
       setAlertsError(null);
       try {
-        if (isDevMode) {
-          const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
-            devMode: true,
-            signal: ac.signal,
-          });
-          if (!cancelled) setAlerts(data.items);
-        } else if (user && sessionReady) {
-          const token = await user.getIdToken();
-          const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: ac.signal,
-          });
-          if (!cancelled) setAlerts(data.items);
+        const items = await fetchAlertsList(ac.signal);
+        if (cancelled) return;
+        if (items !== null) {
+          setAlerts(items);
         } else {
-          if (!cancelled) {
-            setAlerts([]);
-            setAlertsError('Sign in or continue in dev mode to load alerts.');
-          }
+          setAlerts([]);
+          setAlertsError('Sign in or continue in dev mode to load alerts.');
         }
       } catch (e) {
         if (isAbortError(e)) return;
@@ -79,9 +101,9 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
       ac.abort();
     };
-  }, [authLoading, isDevMode, sessionReady, user, viewScopeKey]);
+  }, [authLoading, fetchAlertsList, viewScopeKey]);
 
-  // SSE: /api/events on FastAPI
+  // SSE: /api/events — full Alert from PATCH; forensic/ingest send minimal payloads → refetch list
   useEffect(() => {
     if (authLoading) return;
     let es: EventSource | null = null;
@@ -101,8 +123,22 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       es = new EventSource(url);
       es.onmessage = (event: MessageEvent<string>) => {
         try {
-          const newAlert: Alert = JSON.parse(event.data);
-          setAlerts((prev) => [newAlert, ...prev]);
+          const data: unknown = JSON.parse(event.data);
+          if (isFullAlertPayload(data)) {
+            setAlerts((prev) => {
+              if (prev.some((a) => a.id === data.id)) return prev;
+              return [data, ...prev];
+            });
+            return;
+          }
+          void (async () => {
+            try {
+              const items = await fetchAlertsList();
+              if (items !== null) setAlerts(items);
+            } catch (e) {
+              console.error('Alerts refetch after SSE failed', e);
+            }
+          })();
         } catch (e) {
           console.error('Failed to parse SSE data', e);
         }
@@ -117,7 +153,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       closed = true;
       es?.close();
     };
-  }, [authLoading, isDevMode, sessionReady, user, viewScopeKey]);
+  }, [authLoading, fetchAlertsList, isDevMode, sessionReady, user, viewScopeKey]);
 
   const value = useMemo(
     () => ({

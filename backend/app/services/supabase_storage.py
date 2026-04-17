@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -182,3 +183,49 @@ def parse_bucket_and_object(storage_path: str) -> tuple[str, str] | None:
     if not bucket or not obj:
         return None
     return bucket, obj
+
+
+def download_object_to_path(
+    *,
+    bucket: str,
+    object_key: str,
+    dest: Path,
+    timeout_s: float = 120.0,
+) -> bool:
+    """
+    Authenticated GET /storage/v1/object/{bucket}/{path} (service role).
+    `object_key` is the path inside the bucket (may contain slashes); segments are URL-encoded.
+    """
+    if not settings.supabase_storage_enabled:
+        return False
+    base = _base_url().rstrip("/")
+    key = settings.supabase_service_key or ""
+    if not base or not key:
+        return False
+    enc = _normalize_object_key(object_key)
+    if not enc:
+        return False
+    url = f"{base}/storage/v1/object/{quote(bucket, safe='')}/{enc}"
+    try:
+        with httpx.Client(timeout=timeout_s) as client:
+            r = client.get(url, headers={"Authorization": f"Bearer {key}", "apikey": key})
+            r.raise_for_status()
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(r.content)
+        logger.info("Downloaded storage object %s/%s → %s (%d bytes)", bucket, object_key, dest, len(r.content))
+        return True
+    except Exception as exc:
+        logger.warning("Supabase object download failed bucket=%s key=%s: %s", bucket, object_key, exc)
+        return False
+
+
+def download_storage_path_to_path(storage_path: str, dest: Path, timeout_s: float = 120.0) -> bool:
+    """
+    Download using a full `bucket/object/key` path as stored in model_registry.storage_path
+    (e.g. `models/global/fl_global_meta.pth`, `Client 1/client_1_round_5_meta.pth`).
+    """
+    parsed = parse_bucket_and_object(storage_path.strip())
+    if not parsed:
+        return False
+    bucket, obj_key = parsed
+    return download_object_to_path(bucket=bucket, object_key=obj_key, dest=dest, timeout_s=timeout_s)

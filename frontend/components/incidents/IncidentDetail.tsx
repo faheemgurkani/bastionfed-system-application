@@ -188,12 +188,12 @@ export function IncidentDetail({ incident: initialIncident, onBack }: IncidentDe
                   <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white bg-bg-base text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
                     {getTimelineIcon(event.type)}
                   </div>
-                  <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-bg-base p-4 rounded border border-border-default">
+                  <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] min-w-0 bg-bg-base p-4 rounded border border-border-default">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-display text-[10px] text-text-muted uppercase tracking-wider">{event.type.replace('_', ' ')}</span>
-                      <span className="font-mono text-[10px] text-text-muted">{new Date(event.timestamp).toLocaleTimeString([], { hour12: false })}</span>
+                      <span className="font-display text-[10px] text-text-muted uppercase tracking-wider pr-2">{event.type.replace('_', ' ')}</span>
+                      <span className="font-mono text-[10px] text-text-muted shrink-0">{new Date(event.timestamp).toLocaleTimeString([], { hour12: false })}</span>
                     </div>
-                    <div className="text-sm text-white">{event.description}</div>
+                    <div className="text-sm text-white break-words [overflow-wrap:anywhere]">{event.description}</div>
                   </div>
                 </div>
               ))}

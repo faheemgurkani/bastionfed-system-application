@@ -117,6 +117,9 @@ def bastionbot_chat(
     memory = bastionbot_store.get_user_memory(auth.tenant_id, store_uid)
     fl_scope = scoped_fl_client_ids(auth)
     audit_uid = auth.uid if auth.role == "client_user" else None
+    scope_summary = (
+        f"Scoped to FL clients: {', '.join(sorted(fl_scope))}" if fl_scope is not None else "Full tenant scope"
+    )
     ask = bastionbot_engine.answer(
         query=body.message,
         tenant_store=tenant_store,
@@ -126,6 +129,12 @@ def bastionbot_chat(
         context=body.context,
         fl_client_ids=fl_scope,
         audit_scope_firebase_uid=audit_uid,
+        actor_profile={
+            "uid": actor_uid,
+            "email": auth.email or "",
+            "role": auth.role,
+            "scopeSummary": scope_summary,
+        },
     )
 
     bot_msg = bastionbot_store.append_message(

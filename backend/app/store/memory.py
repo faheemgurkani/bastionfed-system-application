@@ -27,8 +27,11 @@ from app.models.domain import (
     IncidentEvent,
     IncidentStatus,
     MalwareSample,
+    MitreAttackTechnique,
+    Playbook,
     RCAReport,
     SampleAnalysis,
+    Severity,
     StaticAnalysis,
     TimelineNode,
     UserRecord,
@@ -218,6 +221,105 @@ class AppState:
                 self.alerts[i] = updated
                 return updated.model_copy(deep=True)
         return None
+
+    def create_forensic_alert(
+        self,
+        *,
+        fl_client_id: str,
+        confidence: float,
+        threat_score: float,
+        model_used: str,
+        actor_uid: str,
+        filename: str | None = None,
+    ) -> tuple[str, str | None, str | None, str | None]:
+        if not self.devices:
+            return "", None, None, None
+        now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        alert_id = f"ALT-F-{int(time.time() * 1000)}"
+        device: Device | None = None
+        for d in self.devices:
+            if d.fl_client_id == fl_client_id:
+                device = d.model_copy(deep=True)
+                break
+        if device is None:
+            device = self.devices[0].model_copy(deep=True)
+
+        if threat_score >= 85:
+            severity = Severity.CRITICAL
+        elif threat_score >= 70:
+            severity = Severity.HIGH
+        elif threat_score >= 50:
+            severity = Severity.MEDIUM
+        else:
+            severity = Severity.LOW
+
+        summary = f"ML forensic scan detected malware — {filename or 'uploaded file'} (score {threat_score:.1f}%)"
+        tech = MitreAttackTechnique(id="T1204", tactic="Execution", name="User Execution")
+
+        alert = Alert(
+            id=alert_id,
+            timestamp=now_iso,
+            device_id=device.id,
+            device=device,
+            type="ML Malware Detection",
+            tactic="Execution",
+            technique=tech,
+            severity=severity,
+            confidence=round(float(confidence), 2),
+            status=AlertStatus.OPEN,
+            model_version=model_used,
+            threat_intel=[],
+            cve_reference=None,
+            feature_summary=summary,
+            source_type="FORENSIC",
+            source_ref=actor_uid,
+            ingested_at=now_iso,
+            is_demo=False,
+        )
+        self.alerts.insert(0, alert)
+
+        incident_id: str | None = None
+        if threat_score >= 85 and device:
+            incident_id = f"INC-F-{int(time.time() * 1000)}"
+            inc = Incident(
+                id=incident_id,
+                title=f"Malware detected via forensic scan — {filename or 'uploaded file'}",
+                severity=severity,
+                status=IncidentStatus.NEW,
+                affected_devices=[device.model_copy(deep=True)],
+                time_open="0m",
+                analyst_initials="ML",
+                timeline=[
+                    IncidentEvent(
+                        id=f"ev-{int(time.time() * 1000)}",
+                        timestamp=now_iso,
+                        type="ALERT",
+                        description=summary,
+                    )
+                ],
+                playbook=Playbook(
+                    id=f"pb-{incident_id}",
+                    name="Forensic Malware Response",
+                    trigger_condition="FORENSIC",
+                    last_run=now_iso,
+                    executions=0,
+                    status="DRAFT",
+                    steps=[],
+                ),
+                ticket_id=incident_id,
+                reporter=actor_uid,
+                assignee="Unassigned",
+                priority="P1" if severity == Severity.CRITICAL else "P2",
+                created=now_iso,
+                labels=["forensic", "ml-detection"],
+                source_type="FORENSIC",
+                source_ref=actor_uid,
+                ingested_at=now_iso,
+                is_demo=False,
+            )
+            self.incidents.insert(0, inc)
+
+        return alert_id, incident_id, device.id, device.name
 
     # --- Devices ---
 

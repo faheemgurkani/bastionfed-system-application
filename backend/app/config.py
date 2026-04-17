@@ -40,6 +40,8 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="BASTIONBOT_IMPORT_LEGACY_DEFAULT_TENANT_ID",
     )
+    gemini_api_key: str = Field(default="", validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"))
+    gemini_model: str = Field(default="gemini-1.5-flash", validation_alias="GEMINI_MODEL")
     groq_api_key: str = ""
     groq_model: str = "llama-3.1-8b-instant"
     demo_mode: bool = Field(default=False, validation_alias="DEMO_MODE")

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.auth.deps import AuthContext, require_read_auth, require_user, scoped_fl_client_ids
+from app.auth.deps import AuthContext, alert_list_fl_scope, require_read_auth, require_user
 from app.errors import api_error
 from datetime import datetime, timezone
 import anyio
@@ -82,7 +82,7 @@ def list_alerts(
 ):
     if not auth.tenant_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
-    fl_scope = scoped_fl_client_ids(auth)
+    fl_scope = alert_list_fl_scope(auth)
     items, next_cursor, total = tenant_store.list_alerts(
         auth.tenant_id,
         limit=min(limit, 200),
@@ -111,7 +111,7 @@ def patch_alert(
 
     if not auth.tenant_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
-    fl_scope = scoped_fl_client_ids(auth)
+    fl_scope = alert_list_fl_scope(auth)
     if tenant_store.get_alert(auth.tenant_id, alert_id, fl_client_ids=fl_scope) is None:
         raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")
     updated = tenant_store.update_alert_status(auth.tenant_id, alert_id, new_status, auth.uid or "unknown")
@@ -128,7 +128,7 @@ def get_alert(
 ):
     if not auth.tenant_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
-    a = tenant_store.get_alert(auth.tenant_id, alert_id, fl_client_ids=scoped_fl_client_ids(auth))
+    a = tenant_store.get_alert(auth.tenant_id, alert_id, fl_client_ids=alert_list_fl_scope(auth))
     if not a:
         raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")
     return a
@@ -142,7 +142,7 @@ def escalate_alert_to_incident(
     if not auth.tenant_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
     incident = tenant_store.escalate_alert(
-        auth.tenant_id, alert_id, auth.uid or "unknown", fl_client_ids=scoped_fl_client_ids(auth)
+        auth.tenant_id, alert_id, auth.uid or "unknown", fl_client_ids=alert_list_fl_scope(auth)
     )
     if not incident:
         raise api_error(status.HTTP_404_NOT_FOUND, "Alert not found", "ALERT_NOT_FOUND")

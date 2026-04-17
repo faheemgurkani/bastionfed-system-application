@@ -67,6 +67,9 @@ def patch_fl_client(
 def drift(auth: Annotated[AuthContext, Depends(require_read_auth)]) -> dict:
     if not auth.tenant_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
+    from app.ml.drift import get_drift_report, drift_loaded
+    if drift_loaded():
+        return get_drift_report()
     return tenant_store.fl_drift_dict(auth.tenant_id, fl_client_ids=scoped_fl_client_ids(auth))
 
 
@@ -74,32 +77,10 @@ def drift(auth: Annotated[AuthContext, Depends(require_read_auth)]) -> dict:
 def client_drift(auth: Annotated[AuthContext, Depends(require_read_auth)]) -> dict:
     if not auth.tenant_id:
         raise api_error(status.HTTP_403_FORBIDDEN, "Tenant membership required", "TENANT_MEMBERSHIP_REQUIRED")
-    payload = tenant_store.fl_drift_dict(auth.tenant_id, fl_client_ids=scoped_fl_client_ids(auth))
-    entries = payload.get("entries", [])
-    clients = [
-        {
-            "clientId": entry["clientId"],
-            "department": entry["department"],
-            "fvDrift": {"score": entry["driftScore"], "status": "DEMO", "tau": 0.08},
-            "imgDrift": {"score": entry["driftScore"], "status": "DEMO", "tau": 0.08},
-            "combinedScore": entry["driftScore"],
-            "combinedStatus": "DEMO_RESEARCH",
-            "samplesAnalyzed": max(1, 12 - int(entry["roundsAgo"])),
-            "lastEvent": f"{entry['roundsAgo']} rounds ago",
-        }
-        for entry in entries
-    ]
-    return {
-        "available": True,
-        "scope": payload.get("scope", "DEMO_RESEARCH"),
-        "message": payload.get("operatorUse"),
-        "driftMethod": payload.get("driftMethod"),
-        "driftMethodDescription": payload.get("driftMethodDescription"),
-        "zScoreFvDriftNote": payload.get("zScoreFvDriftNote"),
-        "documentationRef": payload.get("documentationRef"),
-        "clients": clients,
-        "checkedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
+    from app.ml.drift import drift_loaded, get_per_client_drift
+    if not drift_loaded():
+        return {"available": False, "clients": [], "checkedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")}
+    return get_per_client_drift()
 
 
 @router.get("/fl/models", response_model=dict)
@@ -207,6 +188,6 @@ def activate_fl_model(
 
     return FLModelActivateResponse(
         activated=model_name,
-        previously_active=prev,
+        previously_active=prev or "",
         switched_at=now_iso,
     )
