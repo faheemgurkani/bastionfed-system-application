@@ -94,7 +94,7 @@ export function ClientArtifactsSection() {
   }
 
   return (
-    <div className="border border-white/10 bg-white/[0.02] p-4 space-y-4">
+    <div className="border border-border-default bg-white/[0.02] p-4 space-y-4">
       <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
         Client training artifacts (bucket path: tenant / client / benign|malware / …)
       </p>
@@ -111,7 +111,7 @@ export function ClientArtifactsSection() {
             <select
               value={flClientId}
               onChange={(e) => setFlClientId(e.target.value)}
-              className="bg-bg-surface border border-white/20 rounded px-2 py-1.5 font-mono text-xs text-white min-w-[10rem]"
+              className="bg-bg-surface border border-border-default rounded px-2 py-1.5 font-mono text-xs text-white min-w-[10rem]"
             >
               <option value="">Select…</option>
               {clients.map((c) => (
@@ -126,7 +126,7 @@ export function ClientArtifactsSection() {
             <select
               value={label}
               onChange={(e) => setLabel(e.target.value as 'benign' | 'malware')}
-              className="bg-bg-surface border border-white/20 rounded px-2 py-1.5 font-mono text-xs text-white"
+              className="bg-bg-surface border border-border-default rounded px-2 py-1.5 font-mono text-xs text-white"
             >
               <option value="benign">benign</option>
               <option value="malware">malware</option>
@@ -151,9 +151,9 @@ export function ClientArtifactsSection() {
           </button>
         </div>
       )}
-      <div className="max-h-48 overflow-y-auto border border-white/10 rounded">
+      <div className="max-h-48 overflow-y-auto border border-border-default rounded">
         <table className="w-full text-left text-[11px] font-mono">
-          <thead className="text-text-muted border-b border-white/10">
+          <thead className="text-text-muted border-b border-border-default">
             <tr>
               <th className="p-2">ID</th>
               <th className="p-2">Client</th>
@@ -163,7 +163,7 @@ export function ClientArtifactsSection() {
           </thead>
           <tbody>
             {artifacts.map((a) => (
-              <tr key={a.id} className="border-b border-white/5 text-white/90">
+              <tr key={a.id} className="border-b border-border-default text-white/90">
                 <td className="p-2">{a.id}</td>
                 <td className="p-2 truncate max-w-[8rem]">{a.fl_client_id}</td>
                 <td className="p-2">{a.label}</td>

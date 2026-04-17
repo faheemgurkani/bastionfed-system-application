@@ -241,7 +241,7 @@ export default function ForensicsPage() {
         <StorageBucketsPanel />
         <ClientArtifactsSection />
 
-        <div className="border border-white/10 bg-white/[0.02] p-4">
+        <div className="border border-border-default bg-white/[0.02] p-4">
           {/* Header row: title */}
           <div className="flex items-center justify-between mb-4">
             <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
@@ -264,7 +264,7 @@ export default function ForensicsPage() {
                 if (imgInputRef.current) imgInputRef.current.value = '';
                 if (fvInputRef.current) fvInputRef.current.value = '';
               }}
-              className="bg-bg-surface border border-white/20 rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-white/40 cursor-pointer appearance-none w-full max-w-md"
+              className="bg-bg-surface border border-border-default rounded px-3 py-2 font-mono text-sm text-white focus:outline-none focus:border-border-strong cursor-pointer appearance-none w-full max-w-md"
               style={{
                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E")`,
                 backgroundRepeat: 'no-repeat',
@@ -300,7 +300,7 @@ export default function ForensicsPage() {
                   className={`border-2 border-dashed rounded p-5 text-center cursor-pointer transition-colors ${
                     imgDragOver ? 'border-accent bg-accent/5' :
                     imageFile ? 'border-green-500/50 bg-green-500/5' :
-                    'border-white/20 hover:border-white/40'
+                    'border-border-default hover:border-border-strong'
                   }`}
                   onClick={() => imgInputRef.current?.click()}
                   onDragOver={(e) => { e.preventDefault(); setImgDragOver(true); }}
@@ -343,7 +343,7 @@ export default function ForensicsPage() {
                   className={`border-2 border-dashed rounded p-5 text-center cursor-pointer transition-colors ${
                     fvDragOver ? 'border-accent bg-accent/5' :
                     fvFile ? 'border-green-500/50 bg-green-500/5' :
-                    'border-white/20 hover:border-white/40'
+                    'border-border-default hover:border-border-strong'
                   }`}
                   onClick={() => fvInputRef.current?.click()}
                   onDragOver={(e) => { e.preventDefault(); setFvDragOver(true); }}
@@ -390,7 +390,7 @@ export default function ForensicsPage() {
             <button
               type="button"
               onClick={clearInputs}
-              className="px-4 py-2 rounded-md font-mono text-xs uppercase tracking-wider border border-white/20 text-muted-foreground hover:text-white hover:border-white/40 transition-colors"
+              className="px-4 py-2 rounded-md font-mono text-xs uppercase tracking-wider border border-border-default text-muted-foreground hover:text-white hover:border-border-strong transition-colors"
             >
               Clear
             </button>
@@ -408,26 +408,26 @@ export default function ForensicsPage() {
                   {analyzeResult.prediction}
                 </p>
               </div>
-              <div className="border border-white/10 p-3">
+              <div className="border border-border-default p-3">
                 <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Confidence</p>
                 <p className="font-mono text-lg font-bold mt-1">{analyzeResult.confidence.toFixed(1)}%</p>
               </div>
-              <div className="border border-white/10 p-3">
+              <div className="border border-border-default p-3">
                 <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Threat Score</p>
                 <p className="font-mono text-lg font-bold mt-1">{analyzeResult.threatScore.toFixed(1)}</p>
               </div>
-              <div className="border border-white/10 p-3">
+              <div className="border border-border-default p-3">
                 <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Model</p>
                 <p className="font-mono text-xs font-bold mt-1 break-all">{analyzeResult.modelUsed}</p>
               </div>
               {analyzeResult.imgProb != null && (
-                <div className="border border-white/10 p-3 col-span-2">
+                <div className="border border-border-default p-3 col-span-2">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">ResNet Prob</p>
                   <p className="font-mono text-sm mt-1">{(analyzeResult.imgProb * 100).toFixed(2)}%</p>
                 </div>
               )}
               {analyzeResult.dnnProb != null && (
-                <div className="border border-white/10 p-3 col-span-2">
+                <div className="border border-border-default p-3 col-span-2">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                     DNN Prob {!analyzeResult.dnnAvailable && <span className="text-yellow-500">(no FV)</span>}
                   </p>
@@ -435,7 +435,7 @@ export default function ForensicsPage() {
                 </div>
               )}
               {analyzeResult.sha256 && (
-                <div className="border border-white/10 p-3 col-span-4">
+                <div className="border border-border-default p-3 col-span-4">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">SHA256</p>
                   <p className="font-mono text-[10px] mt-1 break-all text-muted-foreground">{analyzeResult.sha256}</p>
                 </div>
@@ -450,7 +450,7 @@ export default function ForensicsPage() {
                 </div>
               )}
               {analyzeResult.alertSkippedReason && (
-                <div className="border border-white/15 bg-white/[0.03] p-3 col-span-4">
+                <div className="border border-border-default bg-white/[0.03] p-3 col-span-4">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Why no new alert</p>
                   <p className="font-mono text-xs text-muted-foreground mt-1 leading-relaxed">{analyzeResult.alertSkippedReason}</p>
                 </div>

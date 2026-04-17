@@ -1,0 +1,195 @@
+{
+  "app": "faheem",
+  "checkedAt": "2026-04-16T13:37:59.278062Z",
+  "totalRoutes": 17,
+  "badRoutes": [],
+  "routes": [
+    {
+      "method": "GET",
+      "pathTemplate": "/api/alerts",
+      "urlCalled": "/api/alerts",
+      "status": 401,
+      "durationMs": 2,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "PATCH",
+      "pathTemplate": "/api/alerts/{alert_id}",
+      "urlCalled": "/api/alerts/ALT-TEST",
+      "status": 401,
+      "durationMs": 1,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/incidents",
+      "urlCalled": "/api/incidents",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/incidents/{incident_id}",
+      "urlCalled": "/api/incidents/INC-001",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/fl/status",
+      "urlCalled": "/api/fl/status",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/fl/clients",
+      "urlCalled": "/api/fl/clients",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/fl/clients/{client_id}",
+      "urlCalled": "/api/fl/clients/Client-1",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/fl-events",
+      "urlCalled": "/api/fl-events",
+      "status": 0,
+      "durationMs": 0,
+      "detailCode": null,
+      "exception": null,
+      "skipped": true,
+      "skipReason": "SSE/streaming (events/text/event-stream) \u2014 skipped"
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/forensics/samples",
+      "urlCalled": "/api/forensics/samples",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/forensics/rca/{rca_id}",
+      "urlCalled": "/api/forensics/rca/RCA-TEST",
+      "status": 401,
+      "durationMs": 1,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "POST",
+      "pathTemplate": "/api/devices/{device_id}/quarantine",
+      "urlCalled": "/api/devices/dev-01/quarantine",
+      "status": 401,
+      "durationMs": 1,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/audit/verify",
+      "urlCalled": "/api/audit/verify",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/audit/logs",
+      "urlCalled": "/api/audit/logs",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "POST",
+      "pathTemplate": "/api/auth/session",
+      "urlCalled": "/api/auth/session",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/dashboard/kpis",
+      "urlCalled": "/api/dashboard/kpis",
+      "status": 401,
+      "durationMs": 0,
+      "detailCode": "AUTH_REQUIRED",
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/api/events",
+      "urlCalled": "/api/events",
+      "status": 0,
+      "durationMs": 0,
+      "detailCode": null,
+      "exception": null,
+      "skipped": true,
+      "skipReason": "SSE/streaming (events/text/event-stream) \u2014 skipped"
+    },
+    {
+      "method": "GET",
+      "pathTemplate": "/health",
+      "urlCalled": "/health",
+      "status": 200,
+      "durationMs": 0,
+      "detailCode": null,
+      "exception": null,
+      "skipped": false,
+      "skipReason": null
+    }
+  ]
+}
