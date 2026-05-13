@@ -88,6 +88,18 @@ python scripts/ingest_client_data.py --tenant-slug YOUR_SLUG
 
 See **`DATA_DIRECTORY.md`** for the local `backend/data/` tree, 25% sampling summary, and payload pointers (`scripts/ingest_client_data.py` has the full rules). SQL migrations under `app/db/migrations/` apply automatically on startup when Postgres is configured.
 
+## Vercel (experimental serverless)
+
+Deploy this API as a **second Vercel project** (separate from the Next.js frontend) with **Root Directory** `backend` and framework **FastAPI** (or leave auto-detect).
+
+- **ASGI entry:** root [`main.py`](./main.py) imports `app` from [`app/main.py`](./app/main.py), which matches the [Python runtime](https://vercel.com/docs/functions/runtimes/python) / [FastAPI on Vercel](https://vercel.com/docs/frameworks/backend/fastapi) layout.
+- **Deploy bundle:** [`.vercelignore`](./.vercelignore) drops `hunain_implementation/` from the upload. That tree used to hold **symlinks** into `backend/data/` (not in git); Vercel would warn or fail when resolving those paths. The unified runtime uses `app/` and Supabase for weights.
+- **Project config:** [`vercel.json`](./vercel.json) sets a longer `maxDuration` (raise it in the dashboard if your plan allows) and `excludeFiles` so demo trees, alternate implementations, scripts, and tests are less likely to inflate the Python bundle.
+- **Python line:** [`.python-version`](./.python-version) pins the interpreter series for the build (change it if you standardize on 3.11 locally).
+- **Environment:** Vercel does not use `backend/.env` on disk. Add the same keys from the [Environment variables](#environment-variables) section in the Vercel UI (or `vercel env`). `load_dotenv` in `app/config.py` is a no-op when the file is absent; process env still applies.
+- **CORS:** set **`ALLOWED_ORIGINS`** to a comma-separated list including every browser origin that will call this API (for example `https://<your-frontend>.vercel.app`). The default in `app/config.py` is localhost only.
+- **ML / size:** `requirements.txt` pulls in **PyTorch** and related stacks used by FL inference. Many projects exceed Vercel’s uncompressed [function size limits](https://vercel.com/docs/functions/limitations) or hit impractical cold starts. If the deploy or import step fails, plan on a **container** host (e.g. Cloud Run, Railway, Render) for this backend instead.
+
 ## Tests
 
 Run the unified backend test suite from `backend/`:
