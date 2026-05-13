@@ -123,6 +123,7 @@ export function NetworkTopology() {
             {/* Edges: server → clients */}
             {clients.map((c, i) => {
               const cp = clientPositions[i];
+              if (!cp) return null;
               return (
                 <line
                   key={`edge-server-${c.id}`}
@@ -151,6 +152,7 @@ export function NetworkTopology() {
             {/* FL Client nodes */}
             {clients.map((c, i) => {
               const cp = clientPositions[i];
+              if (!cp) return null;
               const label = c.nodeName ?? c.department ?? c.id.slice(0, 8);
               const shortLabel = label.length > 16 ? label.slice(0, 15) + '…' : label;
               const color = clientColor(c);

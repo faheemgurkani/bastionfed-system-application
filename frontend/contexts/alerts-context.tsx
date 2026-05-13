@@ -49,7 +49,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
       if (isDevMode) {
         const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
           devMode: true,
-          signal,
+          ...(signal !== undefined ? { signal } : {}),
         });
         return data.items;
       }
@@ -57,7 +57,7 @@ export function AlertsProvider({ children }: { children: React.ReactNode }) {
         const token = await user.getIdToken();
         const data = await apiFetchJson<AlertListResponse>('/api/alerts', {
           headers: { Authorization: `Bearer ${token}` },
-          signal,
+          ...(signal !== undefined ? { signal } : {}),
         });
         return data.items;
       }

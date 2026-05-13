@@ -378,7 +378,7 @@ export default function SettingsAccessPage() {
           open={addWizardOpen}
           busy={addWizardBusy}
           results={addWizardResults}
-          onSubmit={(c) => void submitAddClients(c)}
+          onSubmit={(c) => submitAddClients(c)}
           onSkip={closeAddWizard}
           remainingSlots={onboardingLimits?.remaining ?? null}
           maxClientsPerAdmin={onboardingLimits?.maxClientsPerAdmin ?? null}

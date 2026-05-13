@@ -255,7 +255,7 @@ export function IncidentKanban({
               key={col}
               column={col}
               incidents={incidents.filter((inc) => inc.status === col)}
-              loading={loading}
+              loading={Boolean(loading)}
               onSelectIncident={onSelectIncident}
             />
           ))}
