@@ -1,4 +1,4 @@
-"""Initial data aligned with frontend/lib/mock-data.ts (deterministic where TS used Math.random)."""
+"""Initial seed data for demo mode (deterministic fixtures aligned with frontend types)."""
 
 from __future__ import annotations
 

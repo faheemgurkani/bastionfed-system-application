@@ -44,6 +44,13 @@ The unified Hunain stack loads weights from **`hunain_implementation/app/ml/weig
 
 Place files under `data/batch_ingest/client_N/` (see `scripts/ingest_client_data.py` docstring). The script ingests a deterministic **25%** sample of files per folder (sorted by path). JSON and non-JSON rules are described in that script.
 
+## Legacy paths (do not use for new work)
+
+| Path | Notes |
+|------|-------|
+| `FL/` (repo root) | Old research notebook, CSV, and weight copies — **gitignored**; use `backend/data/models/` instead |
+| `backend/Fyp2demo/` | Local forensics demo PNG/JSON drops — **gitignored** |
+
 ## Related docs
 
 - Setup: root **`SETUP_GUIDE.md`** (local data + env vars).

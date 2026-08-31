@@ -95,14 +95,21 @@ class KnowledgeRegistry:
 
     def _doc_paths(self) -> list[str]:
         return [
+            "README.md",
             "SETUP_GUIDE.md",
+            "CONTRIBUTING.md",
+            "SECURITY.md",
+            "CODE_OF_CONDUCT.md",
+            "CHANGELOG.md",
+            "docs/README.md",
+            "docs/LOCAL_TESTING.md",
             "docs/BACKEND_PRD.md",
             "docs/API_ENDPOINTS_IMPLEMENTATION_SPLIT.md",
             "docs/TODO.md",
+            "docs/BASTIONBOT_ASK_MODE.md",
             "docs/FAHEEM/FAHEEM_BACKEND_IMPLEMENTATION.md",
             "docs/FAHEEM/FAHEEM_BACKEND_TODO.md",
-            "docs/FAHEEM/FAHEEM_GAP_REMEDIATION_LOG.md",
-            "docs/FAHEEM/FAHEEM_MANUAL_TEST_PLAN.md",
+            "backend/README.md",
             "frontend/README.md",
         ]
 

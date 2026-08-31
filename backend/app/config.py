@@ -68,7 +68,11 @@ class Settings(BaseSettings):
     # Upstash or any Redis for SSE pub/sub
     redis_url: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("REDIS_URL", "UPSTASH_REDIS_URL"),
+        validation_alias=AliasChoices(
+            "REDIS_URL",
+            "UPSTASH_REDIS_URL",
+            "UPSTASH_REDIS_URL_TCP",
+        ),
     )
     # Supabase Storage (forensics + models buckets)
     supabase_url: str | None = Field(

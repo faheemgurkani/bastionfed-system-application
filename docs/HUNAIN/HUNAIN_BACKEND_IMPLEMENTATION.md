@@ -1,6 +1,6 @@
 # Hunain Backend Implementation — Status & Runbook
 
-This document describes what was implemented for **Hunain’s 12 endpoints** per [`API_ENDPOINTS_IMPLEMENTATION_SPLIT.md`](../API_ENDPOINTS_IMPLEMENTATION_SPLIT.md) and contracts in [`BACKEND_PRD.md`](../BACKEND_PRD.md).
+> **Runtime source of truth:** `backend/` (unified FastAPI). This document describes Hunain’s **12 assigned endpoints**. See [LOCAL_TESTING.md](../LOCAL_TESTING.md) for running the unified stack.
 
 **Scope (phase 1):** FastAPI service with **in-memory** product state, seeded mock data, **stub auth** (no Firebase Admin verification yet), and a completed **BastionBot Ask Mode** backed by **SQLite** for per-user conversations and memory.
 

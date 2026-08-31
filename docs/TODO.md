@@ -17,8 +17,8 @@ Track responsibilities and workstreams by member. Update this file as scope shif
 
 - [ ] **Data plane:** Establish DB artifacts and app connection per **`docs/FIREBASE_DATA_PLANE_MAPPING.md`**.
 - [ ] **FL orchestration state:** Monitor and understand the shortcomings of the fl orchestrations here. 
-- [ ] **Feature catelog:** Address the shortcomings of the feature catalog and come to the reality, as per **`docs/BLUE_TEAM_APPLICATION_SPEC.md`**.
-- [ ] **Auth:** Decide whether to keep the current stub or move to real token verification, then implement accordingly.
+- [ ] **Feature catalog:** Address the shortcomings of the feature catalog and align with reality per **`docs/BLUE_TEAM_APPLICATION_SPEC.md`**.
+- [ ] **Auth / RBAC:** Harden role design beyond demo mode and coarse membership roles.
 - [ ] **Cursor white paper:** Read/research the new Cursor paper; assess implementability and fit for integration with BastionFed.
 
 ---
@@ -37,6 +37,7 @@ Track responsibilities and workstreams by member. Update this file as scope shif
 
 For backend-focused checklists, see also:
 
+- `docs/LOCAL_TESTING.md`
 - `docs/FAHEEM/FAHEEM_BACKEND_TODO.md`
 - `docs/HUNAIN/HUNAIN_BACKEND_TODO.md`
 - `docs/HAMMAD/HAMMAD_BACKEND_TODO.md`

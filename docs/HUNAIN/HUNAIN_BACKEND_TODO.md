@@ -1,47 +1,38 @@
 # Hunain backend — decisions, TODOs, and gaps
 
-This document tracks pending work for Hunain’s endpoint scope after the in-memory phase.
+> **Runtime source of truth:** `backend/` (unified FastAPI). This document tracks Hunain’s original 12-endpoint scope. Standalone fork: `backend/hunain_implementation/`.
 
-References:
-- [`HUNAIN_BACKEND_IMPLEMENTATION.md`](./HUNAIN_BACKEND_IMPLEMENTATION.md)
-- [`HUNAIN_LOCAL_TESTING.md`](./HUNAIN_LOCAL_TESTING.md)
-- [`../BACKEND_PRD.md`](../BACKEND_PRD.md)
+References: [HUNAIN_BACKEND_IMPLEMENTATION.md](./HUNAIN_BACKEND_IMPLEMENTATION.md) · [LOCAL_TESTING.md](../LOCAL_TESTING.md) · [BACKEND_PRD.md](../BACKEND_PRD.md)
 
 ---
 
-## Decisions currently in effect
+## Decisions in effect (unified backend)
 
-- In-memory state only (`AppState`), seeded at startup.
-- Stub bearer auth (token presence), guest mode for read routes.
-- SSE route for FL patches implemented in FastAPI (`/api/fl-events`).
-- JSON contracts use camelCase aliases.
-- BastionBot Ask Mode is now implemented in the unified backend with signed-in-only access, `X-BastionFed-UID` scoping, SQLite persistence, deterministic retrieval, and source citations.
+- Tenant-scoped Postgres when `DATABASE_URL` is set; in-memory fallback for demo/tests
+- Firebase JWT verification on protected routes (`app/auth/firebase.py`)
+- SSE: `/api/fl-events` (fast FL patches), Redis pub/sub when `REDIS_URL` is set
+- BastionBot: signed-in only, Groq + Postgres/SQLite persistence, grounded citations — see [BASTIONBOT_ASK_MODE.md](../BASTIONBOT_ASK_MODE.md)
 
 ---
 
 ## Pending validation (manual/UI)
 
-- [ ] Verify `/api/fl-events` in browser EventSource flow (token mode and reconnect behavior).
-- [ ] Verify BastionBot chat UX path (`/api/bastionbot/chat`) end to end with Google sign-in and per-user persistence.
-- [ ] Verify escalate action from alert drawer end-to-end in UI.
-- [ ] Verify playbook run button behavior in incident detail UI.
-- [ ] Verify model activate action from FL model UI.
+- [ ] `/api/fl-events` EventSource reconnect behavior in browser
+- [ ] BastionBot chat end-to-end with Google sign-in
+- [ ] Alert escalate, playbook run, model activate from UI
 
 ---
 
 ## Gaps vs PRD (known)
 
-- [ ] Firebase Admin SDK verification not integrated (currently stub bearer check).
-- [ ] BastionBot identity still relies on frontend-provided `X-BastionFed-UID` until Firebase Admin verification is added.
-- [ ] `POST /api/alerts/{alert_id}/escalate` currently returns 200; PRD example indicates 201.
-- [ ] `GET /api/incidents` router currently exposes limit/cursor; PRD also describes extra filters.
-- [ ] `GET /api/fl/rounds` PRD mentions query options that are not yet surfaced in router signature.
-- [ ] SSE auth policy currently permits guest mode; PRD text leans token-based for SSE.
+- [ ] `POST /api/alerts/{alert_id}/escalate` returns 200; PRD example indicates 201
+- [ ] `GET /api/incidents` — extra PRD filters not fully exposed
+- [ ] Guest/demo SSE policy vs production token-only policy — confirm product decision
 
 ---
 
 ## Suggested next steps
 
-1. Lock contract deltas (status codes + query params) with team.
-2. Add Firebase Admin verification in auth dependency layer so BastionBot no longer relies on asserted UID headers.
-3. Keep the unified test suite green while applying strict PRD-alignment fixes.
+1. Lock contract deltas (status codes, query params) with team
+2. Keep unified pytest green while applying PRD-alignment fixes
+3. See [TODO.md](../TODO.md) for cross-team priorities

@@ -8,15 +8,18 @@ This contains everything you need to run the frontend locally against the unifie
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:** Node.js 18+
 
+1. Copy env template: `cp .env.example .env.local` (or obtain `.env.local` from the frontend lead)
+2. Set `NEXT_PUBLIC_API_URL=http://localhost:8000`
+3. Install and run:
 
-1. Install dependencies:
-   `npm install`
-2. Ensure `.env.local` points to the backend:
-   `NEXT_PUBLIC_API_URL=http://localhost:8000`
-3. Run the app:
-   `npm run dev`
+```bash
+npm install
+npm run dev
+```
+
+Full stack setup: [SETUP_GUIDE.md](../SETUP_GUIDE.md)
 
 ## BastionBot
 

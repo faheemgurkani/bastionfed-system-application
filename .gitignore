@@ -4,17 +4,22 @@ node_modules/
 frontend/.next/
 frontend/node_modules/
 frontend/tsconfig.tsbuildinfo
+coverage/
+.turbo/
+.vercel
 
 # ── Environment / secrets ─────────────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
+backend/.env
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local
 
 # ── OS / editor noise ─────────────────────────────────────────────────────────
 .DS_Store
+**/.DS_Store
 Thumbs.db
 *.swp
 *.swo
@@ -22,15 +27,36 @@ Thumbs.db
 .vscode/settings.json
 
 # ── Python ───────────────────────────────────────────────────────────────────
-backend/.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+htmlcov/
+.coverage
 
-# ── Local / runtime data (models, samples, SQLite, etc.) ──────────────────────
-# Layout (tracked): backend/DATA_DIRECTORY.md
+backend/.venv/
+backend/*_implementation/.venv/
+
+# ── Local / runtime data (models, samples, SQLite, ingest) ─────────────────────
+# Canonical layout: backend/DATA_DIRECTORY.md
 backend/data/
+
+# Local research / duplicate ML artefacts (use backend/data/models/ instead)
+FL/
+
+# Local forensics demo drops (not for version control)
+backend/Fyp2demo/
+
+# Script output snapshots
+backend/test_output/
+
+# ── Personal / draft docs (not shipped) ──────────────────────────────────────
+docs/report_writing/
 
 # ── Misc ──────────────────────────────────────────────────────────────────────
 *.log
-.turbo/
 fusion/
-
-docs/report_writing/*
+.ipynb_checkpoints/

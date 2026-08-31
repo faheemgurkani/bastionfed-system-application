@@ -139,7 +139,7 @@ def strict_env_misconfiguration_message() -> str | None:
     if not settings.persistence_enabled:
         missing.append("DATABASE_URL or SUPABASE_DATABASE_URL")
     if not settings.redis_enabled:
-        missing.append("REDIS_URL or UPSTASH_REDIS_URL")
+        missing.append("REDIS_URL, UPSTASH_REDIS_URL, or UPSTASH_REDIS_URL_TCP")
     if not settings.supabase_storage_enabled:
         missing.append("SUPABASE_URL (or SUPABASE_PROJECT_URL) and SUPABASE_SERVICE_KEY")
     if missing:

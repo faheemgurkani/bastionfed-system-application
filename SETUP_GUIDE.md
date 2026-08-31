@@ -1,5 +1,7 @@
 # BastionFed — Setup Guide
 
+> See also [README.md](./README.md) and [docs/README.md](./docs/README.md) for the full documentation index.
+
 ## Prerequisites
 
 - Node.js 18+
@@ -84,11 +86,13 @@ GROQ_API_KEY=
 GROQ_MODEL=llama-3.1-8b-instant
 ```
 
-The contributor-specific backends still remain intact and runnable independently:
+The contributor-specific backends remain for **isolated testing only** (not required for normal development):
 
 - `backend/faheem_implementation/`
 - `backend/hunain_implementation/`
 - `backend/hammad_implementation/`
+
+See [docs/LOCAL_TESTING.md](./docs/LOCAL_TESTING.md) §4.
 
 ---
 

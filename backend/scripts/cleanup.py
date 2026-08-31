@@ -17,6 +17,7 @@ Usage
   python cleanup.py --yes --supabase-redis-only   # Postgres + Storage + Redis only
   python cleanup.py --yes --skip-redis   # skip Redis (e.g. REST connect hangs)
   python cleanup.py --yes --postgres-auth-only    # Postgres only: users + memberships + scopes + invites (keeps tenants, FL, alerts, …)
+  python cleanup.py --yes --firebase-only         # Firebase Auth + Firestore only
 
 The script loads .env from the backend root automatically,
 regardless of whether you run it as:
@@ -827,21 +828,143 @@ def clean_firestore(dry: bool) -> None:
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
+# def main(
+#     dry: bool,
+#     supabase_redis_only: bool,
+#     skip_redis: bool = False,
+#     postgres_auth_only: bool = False,
+#     firebase_only: bool = False,
+# ) -> None:
+#     print()
+#     if dry:
+#         print("  ⚡ DRY RUN — nothing will be deleted.  Re-run with  --yes  to commit.")
+#     else:
+#         print("  🗑  LIVE DELETE — data will be permanently removed.")
+#     if firebase_only and not dry:
+#         print("  (Firebase Auth + Firestore only — Postgres / Storage / Redis unchanged.)\n")
+#     elif postgres_auth_only and not dry:
+#         print("  (Postgres auth tables only — tenants / product data / Firebase unchanged.)\n")
+#     elif supabase_redis_only and not dry:
+#         print("  (Supabase + Redis only — Firebase / Firestore skipped.)\n")
+
+#     if firebase_only:
+#         clean_firebase_auth(dry)
+#         clean_firestore(dry)
+#         _hr()
+#         if dry:
+#             print("  Dry run complete.  Pass  --yes  to actually delete.\n")
+#         else:
+#             print("  Firebase-only cleanup finished.\n")
+#         return
+
+#     if postgres_auth_only:
+#         clean_postgres_auth_only(dry)
+#         _hr()
+#         if dry:
+#             print("  Dry run complete.  Pass  --yes  to actually delete.\n")
+#         else:
+#             print("  Postgres auth-only cleanup finished.\n")
+#         return
+
+#     clean_postgres(dry)
+#     clean_supabase_storage(dry)
+#     clean_redis(dry, skip_redis=skip_redis)
+#     if not supabase_redis_only:
+#         clean_firebase_auth(dry)
+#         clean_firestore(dry)
+
+#     _hr()
+#     if dry:
+#         print("  Dry run complete.  Pass  --yes  to actually delete.\n")
+#     else:
+#         if supabase_redis_only:
+#             print("  Supabase + Redis cleanup finished.\n")
+#         else:
+#             print("  All done.  BastionFed data has been wiped.\n")
+
+
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser(
+#         description="Wipe all BastionFed development data (dry-run by default).",
+#     )
+#     parser.add_argument(
+#         "--yes",
+#         action="store_true",
+#         help="Actually delete. Omit this flag for a safe dry-run.",
+#     )
+#     parser.add_argument(
+#         "--supabase-redis-only",
+#         action="store_true",
+#         help="Only wipe Postgres, Storage buckets, and Redis; skip Firebase Auth and Firestore.",
+#     )
+#     parser.add_argument(
+#         "--skip-redis",
+#         action="store_true",
+#         help="Skip Redis cleanup (use if Upstash REST or TCP hangs).",
+#     )
+#     parser.add_argument(
+#         "--postgres-auth-only",
+#         action="store_true",
+#         help="Only clear Postgres users, memberships, client scopes, and invites (keeps tenants and app data).",
+#     )
+#     parser.add_argument(
+#         "--firebase-only",
+#         action="store_true",
+#         help="Only wipe Firebase Auth users and Firestore documents; skip Postgres, Storage, and Redis.",
+#     )
+#     args = parser.parse_args()
+#     if args.postgres_auth_only and args.supabase_redis_only:
+#         parser.error("--postgres-auth-only cannot be combined with --supabase-redis-only")
+#     if args.firebase_only and (args.supabase_redis_only or args.postgres_auth_only):
+#         parser.error("--firebase-only cannot be combined with --supabase-redis-only or --postgres-auth-only")
+#     main(
+#         dry=not args.yes,
+#         supabase_redis_only=args.supabase_redis_only,
+#         skip_redis=args.skip_redis,
+#         postgres_auth_only=args.postgres_auth_only,
+#         firebase_only=args.firebase_only,
+#     )
+
 def main(
     dry: bool,
     supabase_redis_only: bool,
     skip_redis: bool = False,
     postgres_auth_only: bool = False,
+    firebase_only: bool = False,
+    redis_only: bool = False,
 ) -> None:
     print()
     if dry:
         print("  ⚡ DRY RUN — nothing will be deleted.  Re-run with  --yes  to commit.")
     else:
         print("  🗑  LIVE DELETE — data will be permanently removed.")
-    if postgres_auth_only and not dry:
+    if redis_only and not dry:
+        print("  (Redis only — Postgres / Storage / Firebase / Firestore unchanged.)\n")
+    elif firebase_only and not dry:
+        print("  (Firebase Auth + Firestore only — Postgres / Storage / Redis unchanged.)\n")
+    elif postgres_auth_only and not dry:
         print("  (Postgres auth tables only — tenants / product data / Firebase unchanged.)\n")
     elif supabase_redis_only and not dry:
         print("  (Supabase + Redis only — Firebase / Firestore skipped.)\n")
+
+    if redis_only:
+        clean_redis(dry, skip_redis=False)
+        _hr()
+        if dry:
+            print("  Dry run complete.  Pass  --yes  to actually delete.\n")
+        else:
+            print("  Redis-only cleanup finished.\n")
+        return
+
+    if firebase_only:
+        clean_firebase_auth(dry)
+        clean_firestore(dry)
+        _hr()
+        if dry:
+            print("  Dry run complete.  Pass  --yes  to actually delete.\n")
+        else:
+            print("  Firebase-only cleanup finished.\n")
+        return
 
     if postgres_auth_only:
         clean_postgres_auth_only(dry)
@@ -893,12 +1016,28 @@ if __name__ == "__main__":
         action="store_true",
         help="Only clear Postgres users, memberships, client scopes, and invites (keeps tenants and app data).",
     )
+    parser.add_argument(
+        "--firebase-only",
+        action="store_true",
+        help="Only wipe Firebase Auth users and Firestore documents; skip Postgres, Storage, and Redis.",
+    )
+    parser.add_argument(
+        "--redis-only",
+        action="store_true",
+        help="Only flush Redis; skip Postgres, Storage, Firebase Auth, and Firestore.",
+    )
     args = parser.parse_args()
     if args.postgres_auth_only and args.supabase_redis_only:
         parser.error("--postgres-auth-only cannot be combined with --supabase-redis-only")
+    if args.firebase_only and (args.supabase_redis_only or args.postgres_auth_only):
+        parser.error("--firebase-only cannot be combined with --supabase-redis-only or --postgres-auth-only")
+    if args.redis_only and (args.supabase_redis_only or args.postgres_auth_only or args.firebase_only or args.skip_redis):
+        parser.error("--redis-only cannot be combined with --supabase-redis-only, --postgres-auth-only, --firebase-only, or --skip-redis")
     main(
         dry=not args.yes,
         supabase_redis_only=args.supabase_redis_only,
         skip_redis=args.skip_redis,
         postgres_auth_only=args.postgres_auth_only,
+        firebase_only=args.firebase_only,
+        redis_only=args.redis_only,
     )

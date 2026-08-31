@@ -1,10 +1,6 @@
 # Hammad Backend Implementation — Status & Runbook
 
-This document describes what was implemented for **Hammad’s 12 endpoints** per [`API_ENDPOINTS_IMPLEMENTATION_SPLIT.md`](../API_ENDPOINTS_IMPLEMENTATION_SPLIT.md) and contracts in [`BACKEND_PRD.md`](../BACKEND_PRD.md).
-
-**Scope (phase 1):** FastAPI service with in-memory state, seeded mock data, and stub auth.
-
-**Parity note:** Hammad's endpoint logic is now also promoted into the shared `backend/` runtime, so running the backend from the top-level `backend/` directory includes Hammad's operational routes alongside Faheem and Hunain. The standalone `backend/hammad_implementation/` service remains runnable independently.
+> **Runtime source of truth:** `backend/` (unified FastAPI). Hammad’s endpoint logic is promoted into the unified backend. See [LOCAL_TESTING.md](../LOCAL_TESTING.md).
 
 ---
 
